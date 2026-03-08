@@ -301,6 +301,8 @@ class SaleController extends Controller
         $variants = $product->variants->map(function ($v) use ($product) {
             // Get real stock from stocks table for this variant
             $vStock = Stock::where('product_id', $product->id)
+                ->where('branch_id', 1)
+                ->where('warehouse_id', 1)
                 ->where('variant_id', $v->id)
                 ->first();
             
@@ -605,7 +607,10 @@ class SaleController extends Controller
 
                 // Use pre-fetched stock 
                 // In Bin Sultan POS, we deduct stock for BOTH final sale and save_token
-                $stockQuery = Stock::where('product_id', $product_id);
+                // Default branch/warehouse to 1 for POS for now
+                $stockQuery = Stock::where('product_id', $product_id)
+                                   ->where('branch_id', 1)
+                                   ->where('warehouse_id', 1);
                 
                 $prodModel = $productsMap[$product_id] ?? null;
                 $isGram = $prodModel && $prodModel->unit_type === 'kg';
@@ -640,6 +645,8 @@ class SaleController extends Controller
                         $stock->save();
                     } else {
                         \App\Models\Stock::create([
+                            'branch_id'  => 1,
+                            'warehouse_id' => 1,
                             'product_id' => $product_id,
                             'variant_id' => $dbVariantId,
                             'qty'        => 0 - $deductQty,
@@ -895,7 +902,9 @@ class SaleController extends Controller
                         }
                     }
 
-                    $stockQuery = \App\Models\Stock::where('product_id', $product_id);
+                    $stockQuery = \App\Models\Stock::where('product_id', $product_id)
+                                                    ->where('branch_id', 1)
+                                                    ->where('warehouse_id', 1);
                     if ($dbVariantId) $stockQuery->where('variant_id', $dbVariantId);
                     else $stockQuery->whereNull('variant_id');
                     $stock = $stockQuery->first();
@@ -904,7 +913,13 @@ class SaleController extends Controller
                         $stock->qty -= $deductQtyDiff;
                         $stock->save();
                     } else {
-                        \App\Models\Stock::create(['product_id' => $product_id, 'variant_id' => $dbVariantId, 'qty' => -$deductQtyDiff]);
+                        \App\Models\Stock::create([
+                            'branch_id'  => 1,
+                            'warehouse_id' => 1,
+                            'product_id' => $product_id, 
+                            'variant_id' => $dbVariantId, 
+                            'qty' => -$deductQtyDiff
+                        ]);
                     }
                 }
             }
@@ -935,7 +950,9 @@ class SaleController extends Controller
                         }
                     }
 
-                    $stockQuery = \App\Models\Stock::where('product_id', $pid);
+                    $stockQuery = \App\Models\Stock::where('product_id', $pid)
+                                                    ->where('branch_id', 1)
+                                                    ->where('warehouse_id', 1);
                     if ($dbVariantId) $stockQuery->where('variant_id', $dbVariantId);
                     else $stockQuery->whereNull('variant_id');
                     
@@ -1468,8 +1485,10 @@ class SaleController extends Controller
                 if ($foundProduct) {
                     // Update stock: find stock row for product in same branch/warehouse (use sale's warehouse if available)
                     // If you use branch_id or auth()->id() use appropriate field
-                    $stockQuery = \App\Models\Stock::where('product_id', $foundProduct->id);
-                    // if your sale has warehouse info use that, else we skip warehouse filter
+                    $stockQuery = \App\Models\Stock::where('product_id', $foundProduct->id)
+                                                    ->where('branch_id', 1)
+                                                    ->where('warehouse_id', 1);
+                    // if your sale has warehouse info use that, else we use default 1
                     if (!empty($sale->warehouse_id)) {
                         $stockQuery->where('warehouse_id', $sale->warehouse_id);
                     }
@@ -1882,7 +1901,9 @@ class SaleController extends Controller
                 // Clear from map so we know it's handled
                 unset($oldMap[$key]);
 
-                $stockQuery = \App\Models\Stock::where('product_id', $product_id);
+                $stockQuery = \App\Models\Stock::where('product_id', $product_id)
+                                                ->where('branch_id', 1)
+                                                ->where('warehouse_id', 1);
                 if ($vId) {
                     $stockQuery->where('variant_id', $vId);
                 } else {
@@ -1895,6 +1916,8 @@ class SaleController extends Controller
                     $stock->save();
                 } else {
                     \App\Models\Stock::create([
+                        'branch_id'  => 1,
+                        'warehouse_id' => 1,
                         'product_id' => $product_id,
                         'variant_id' => $vId ?: null,
                         'qty'        => -$qty_diff,
@@ -1909,7 +1932,9 @@ class SaleController extends Controller
                 $pid = $parts[0];
                 $vid = $parts[1] === '0' ? null : $parts[1];
 
-                $stockQuery = \App\Models\Stock::where('product_id', $pid);
+                $stockQuery = \App\Models\Stock::where('product_id', $pid)
+                                                ->where('branch_id', 1)
+                                                ->where('warehouse_id', 1);
                 if ($vid) {
                     $stockQuery->where('variant_id', $vid);
                 } else {

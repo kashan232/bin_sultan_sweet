@@ -130,6 +130,20 @@
 <input type="hidden" name="action" id="hAction" value="sale">
 <input type="hidden" name="running_sale_id" id="hRunningSaleId" value="">
 
+@if(session('success'))
+    <div class="alert alert-success alert-dismissible fade show" role="alert" style="margin: 10px;">
+        {{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+@endif
+
+@if(session('error'))
+    <div class="alert alert-danger alert-dismissible fade show" role="alert" style="margin: 10px;">
+        {{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+@endif
+
 <div class="pos-wrap">
 {{-- ======= LEFT ======= --}}
 <div class="pos-left">
