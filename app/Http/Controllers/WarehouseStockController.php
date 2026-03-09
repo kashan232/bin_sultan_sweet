@@ -98,7 +98,7 @@ class WarehouseStockController extends Controller
             $row->product    = $product;
 
             $row->warehouse      = $warehouseByProduct[$pid] ?? null;
-            $row->warehouse_id   = $warehouseByProduct[$pid]->id ?? null;
+            $row->warehouse_id   = isset($warehouseByProduct[$pid]) ? $warehouseByProduct[$pid]->id : null;
 
             $row->shop_stock      = $shopQty;
             $row->warehouse_stock = $warehouseQty;

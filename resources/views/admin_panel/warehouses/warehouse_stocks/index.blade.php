@@ -116,11 +116,11 @@
                     <tr>
                         <td>{{ $loop->iteration }}</td>
                         <td>{{ $stock->created_at->format('d M Y') }}</td>
-                        <td>{{ $stock->warehouse->warehouse_name ?? '— Shop —' }}</td>
-                        <td>{{ $stock->product->item_name }}</td>
-                        <td>{{ $stock->product->unit_id }}</td>
-                        <td>{{ $stock->product->brand->name }}</td>
-                        <td>{{ $stock->product->price }}</td>
+                        <td>{{ $stock->warehouse?->warehouse_name ?? '— Shop —' }}</td>
+                        <td>{{ $stock->product?->item_name }}</td>
+                        <td>{{ $stock->product?->unit?->name ?? $stock->product?->unit_id }}</td>
+                        <td>{{ $stock->product?->brand?->name ?? 'N/A' }}</td>
+                        <td>{{ $stock->product?->price }}</td>
 
                         <!-- new computed fields -->
                         <td class="text-center">{{ number_format($stock->shop_stock ?? 0, 2) }}</td>

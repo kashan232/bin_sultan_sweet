@@ -31,7 +31,7 @@
                         <tbody>
                             @foreach($warehouses as $key => $w)
                             <tr>
-                                <td>{{ $key+1 }}</td><td>{{ $w->user->name }}</td><td>{{ $w->warehouse_name }}</td><td>{{ $w->location }}</td><td>{{ $w->remarks }}</td>
+                                <td>{{ $key+1 }}</td><td>{{ $w->user?->name }}</td><td>{{ $w->warehouse_name }}</td><td>{{ $w->location }}</td><td>{{ $w->remarks }}</td>
                                 <td>
                                     {{-- <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#warehouseModal" onclick="editWarehouse('{{ $w->id }}','{{ $w->warehouse_name }}','{{ $w->location }}','{{ $w->remarks }}')">Edit</button> --}}
                                     <button class="btn btn-sm btn-primary edit-warehouse-btn"
