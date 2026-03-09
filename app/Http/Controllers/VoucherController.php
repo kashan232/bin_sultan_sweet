@@ -628,8 +628,8 @@ class VoucherController extends Controller
                 'date'         => $request->date,
                 'type'         => $request->vendor_type, // Account Head
                 'party_id'     => $request->vendor_id,   // Account
-                'remarks'      => json_encode($request->remarks),
-                'amount'       => json_encode($request->amount),
+                'remarks'      => $request->remarks, // Assuming ExpenseVoucher model has casts for this
+                'amount'       => $request->amount, // Assuming ExpenseVoucher model has casts for this
                 'total_amount' => $totalAmount,
             ]);
 
@@ -668,9 +668,9 @@ class VoucherController extends Controller
     {
         $voucher = ExpenseVoucher::findOrFail($id);
 
-        // ✅ Decode remarks & amounts
-        $remarks = json_decode($voucher->remarks, true) ?? [];
-        $amounts = json_decode($voucher->amount, true) ?? [];
+        // ✅ Remarks & amounts are already arrays due to model casts
+        $remarks = $voucher->remarks ?? [];
+        $amounts = $voucher->amount ?? [];
 
         // ✅ Build rows (Remarks + Amount only)
         $rows = [];

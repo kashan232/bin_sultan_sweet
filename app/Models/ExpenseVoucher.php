@@ -15,6 +15,7 @@ class ExpenseVoucher extends Model
         'row_account_head' => 'array',
         'row_account_id' => 'array',
         'amount' => 'array',
+        'remarks' => 'array',
     ];
 
     /**
