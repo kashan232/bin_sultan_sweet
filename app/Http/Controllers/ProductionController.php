@@ -15,7 +15,8 @@ class ProductionController extends Controller
         $entries = DB::table('production_entries as pe')
             ->leftJoin('users as u', 'u.id', '=', 'pe.created_by')
             ->select('pe.*', 'u.name as user_name', 
-                DB::raw('(SELECT COUNT(*) FROM production_entry_items WHERE production_entry_id = pe.id) as items_count')
+                DB::raw('(SELECT COUNT(*) FROM production_entry_items WHERE production_entry_id = pe.id) as items_count'),
+                DB::raw("(SELECT GROUP_CONCAT(p.item_name SEPARATOR ', ') FROM production_entry_items pei JOIN products p ON p.id = pei.product_id WHERE pei.production_entry_id = pe.id) as product_names")
             )
             ->orderBy('pe.created_at', 'desc')
             ->paginate(15);

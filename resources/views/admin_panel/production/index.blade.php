@@ -27,7 +27,7 @@
                                                 <th>Batch #</th>
                                                 <th>Date</th>
                                                 <th>Source</th>
-                                                <th>Total Items</th>
+                                                <th>Items</th>
                                                 <th>Notes</th>
                                                 <th>Created By</th>
                                                 <th>Action</th>
@@ -37,9 +37,15 @@
                                             @forelse($entries as $e)
                                             <tr>
                                                 <td><strong>{{ $e->entry_no }}</strong></td>
-                                                <td>{{ $e->production_date }}</td>
+                                                <td>{{ \Carbon\Carbon::parse($e->production_date)->format('d-M-Y') }}</td>
                                                 <td><span class="badge bg-info text-capitalize">{{ $e->source }}</span></td>
-                                                <td>{{ $e->items_count }} items</td>
+                                                <td>
+                                                    <div title="{{ $e->product_names }}">
+                                                        {{ \Illuminate\Support\Str::limit($e->product_names, 40) }}
+                                                        <br>
+                                                        <small class="text-muted">({{ $e->items_count }} items)</small>
+                                                    </div>
+                                                </td>
                                                 <td>{{ $e->notes ?? '-' }}</td>
                                                 <td>{{ $e->user_name ?? 'System' }}</td>
                                                 <td>
