@@ -40,8 +40,8 @@
                                                 <td>{{ \Carbon\Carbon::parse($e->production_date)->format('d-M-Y') }}</td>
                                                 <td><span class="badge bg-info text-capitalize">{{ $e->source }}</span></td>
                                                 <td>
-                                                    <div title="{{ $e->product_names }}">
-                                                        {{ \Illuminate\Support\Str::limit($e->product_names, 40) }}
+                                                    <div title="{{ $e->product_details }}">
+                                                        {{ \Illuminate\Support\Str::limit($e->product_details, 60) }}
                                                         <br>
                                                         <small class="text-muted">({{ $e->items_count }} items)</small>
                                                     </div>
