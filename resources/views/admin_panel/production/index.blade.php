@@ -21,7 +21,7 @@
                         <div class="card">
                             <div class="card-body">
                                 <div class="table-responsive">
-                                    <table class="table table-striped table-hover">
+                                    <table id="datatable" class="table table-striped table-hover">
                                         <thead>
                                             <tr>
                                                 <th>Batch #</th>
@@ -62,9 +62,6 @@
                                             @endforelse
                                         </tbody>
                                     </table>
-                                </div>
-                                <div class="mt-3">
-                                    {{ $entries->links() }}
                                 </div>
                             </div>
                         </div>

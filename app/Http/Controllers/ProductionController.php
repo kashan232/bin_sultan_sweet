@@ -19,7 +19,7 @@ class ProductionController extends Controller
                 DB::raw("(SELECT GROUP_CONCAT(p.item_name SEPARATOR ', ') FROM production_entry_items pei JOIN products p ON p.id = pei.product_id WHERE pei.production_entry_id = pe.id) as product_names")
             )
             ->orderBy('pe.created_at', 'desc')
-            ->paginate(15);
+            ->get();
 
         return view('admin_panel.production.index', compact('entries'));
     }
