@@ -60,7 +60,8 @@ class ReportingController extends Controller
         $productions = DB::table('production_entry_items')
             ->join('production_entries', 'production_entries.id', '=', 'production_entry_items.production_entry_id')
             ->whereIn('production_entry_items.product_id', $productIds)
-            ->whereBetween('production_entries.production_date', [$startDate, $endDate])
+            ->whereDate('production_entries.production_date', '>=', $startDate)
+            ->whereDate('production_entries.production_date', '<=', $endDate)
             ->select('production_entry_items.product_id', 'production_entry_items.variant_id', DB::raw('SUM(production_entry_items.qty_stock) as total_qty'))
             ->groupBy('production_entry_items.product_id', 'production_entry_items.variant_id')
             ->get();
@@ -78,12 +79,12 @@ class ReportingController extends Controller
             ->select('product_id', 'variant_id', 'qty')
             ->get();
 
-        // Mapping helper: key = pid_vid
-        $mapP = []; foreach($purchases as $p) { $mapP[$p->product_id . '_' . ($p->variant_id ?? '0')] = $p->total_qty; }
-        $mapProd = []; foreach($productions as $pd) { $mapProd[$pd->product_id . '_' . ($pd->variant_id ?? '0')] = ($mapProd[$pd->product_id . '_' . ($pd->variant_id ?? '0')] ?? 0) + $pd->total_qty; }
+        // Mapping helper: key = pid_vid (use 0 for null variant)
+        $mapP = []; foreach($purchases as $p) { $mapP[$p->product_id . '_' . ($p->variant_id ?? 0)] = $p->total_qty; }
+        $mapProd = []; foreach($productions as $pd) { $mapProd[$pd->product_id . '_' . ($pd->variant_id ?? 0)] = ($mapProd[$pd->product_id . '_' . ($pd->variant_id ?? 0)] ?? 0) + $pd->total_qty; }
         // purchase_return_items has no variant_id — map by product only (key pid_0)
         $mapPR = []; foreach($purchaseReturns as $pr) { $mapPR[$pr->product_id . '_0'] = ($mapPR[$pr->product_id . '_0'] ?? 0) + $pr->total_qty; }
-        $mapS = []; foreach($currStocks as $cs) { $mapS[$cs->product_id . '_' . ($cs->variant_id ?? '0')] = $cs->qty; }
+        $mapS = []; foreach($currStocks as $cs) { $mapS[$cs->product_id . '_' . ($cs->variant_id ?? 0)] = $cs->qty; }
 
         // Sales processing (by product and variant) with DATE filter
         $hasVariantIdInSales = \Illuminate\Support\Facades\Schema::hasColumn('sales', 'variant_id');
@@ -145,11 +146,11 @@ class ReportingController extends Controller
         $prodAfter = DB::table('production_entry_items')
             ->join('production_entries', 'production_entries.id', '=', 'production_entry_items.production_entry_id')
             ->whereIn('production_entry_items.product_id', $productIds)
-            ->where('production_entries.production_date', '>', $endDate)
+            ->whereDate('production_entries.production_date', '>', $endDate)
             ->select('production_entry_items.product_id', 'production_entry_items.variant_id', DB::raw('SUM(production_entry_items.qty_stock) as total_qty'))
             ->groupBy('production_entry_items.product_id', 'production_entry_items.variant_id')
             ->get();
-        $mapProdAft = []; foreach($prodAfter as $pd) { $mapProdAft[$pd->product_id . '_' . ($pd->variant_id ?? '0')] = ($mapProdAft[$pd->product_id . '_' . ($pd->variant_id ?? '0')] ?? 0) + $pd->total_qty; }
+        $mapProdAft = []; foreach($prodAfter as $pd) { $mapProdAft[$pd->product_id . '_' . ($pd->variant_id ?? 0)] = ($mapProdAft[$pd->product_id . '_' . ($pd->variant_id ?? 0)] ?? 0) + $pd->total_qty; }
 
         $prAfter = DB::table('purchase_return_items')
             ->join('purchase_returns', 'purchase_returns.id', '=', 'purchase_return_items.purchase_return_id')
@@ -243,16 +244,31 @@ class ReportingController extends Controller
                     
                     $purchased = (float)($mapP[$key] ?? 0);
                     $produced  = (float)($mapProd[$key] ?? 0);
+                    
+                    // If this is the default (or first) variant, also include base product productions (without variant ID)
+                    if ($v->is_default || $p->variants->first()->id == $v->id) {
+                        $produced += (float)($mapProd[$p->id . '_0'] ?? 0);
+                    }
+
                     $pReturn   = (float)($mapPR[$p->id . '_0'] ?? 0); 
                     if ($pReturn == 0) { }
                     $sold      = (float)($soldMap[$key] ?? 0);
                     $sReturn   = (float)($retMap[$key] ?? 0);
                     $balance   = (float)($mapS[$key] ?? 0);
+                    
+                    // If this is default variant, also include base product stock if any
+                    if ($v->is_default || $p->variants->first()->id == $v->id) {
+                        $balance += (float)($mapS[$p->id . '_0'] ?? 0);
+                    }
+
                     $adjInc    = (float)($mapAdjInc[$p->id . '_0'] ?? 0);
                     $adjDec    = (float)($mapAdjDec[$p->id . '_0'] ?? 0);
 
                     $purchAft = (float)($mapPAft[$key] ?? 0);
                     $prodAft  = (float)($mapProdAft[$key] ?? 0); 
+                    if ($v->is_default || $p->variants->first()->id == $v->id) {
+                        $prodAft += (float)($mapProdAft[$p->id . '_0'] ?? 0);
+                    }
                     $prAft    = (float)($mapPRAft[$p->id . '_0'] ?? 0);
                     $soldAft  = (float)($soldAftMap[$key] ?? 0);
                     $sRetAft  = (float)($retAftMap[$key] ?? 0);
