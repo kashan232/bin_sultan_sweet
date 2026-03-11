@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('expense_vouchers', function (Blueprint $table) {
-            $table->date('date')->nullable()->after('entry_date');
-        });
+        if (!Schema::hasColumn('expense_vouchers', 'date')) {
+            Schema::table('expense_vouchers', function (Blueprint $table) {
+                $table->date('date')->nullable()->after('entry_date');
+            });
+        }
     }
 
     /**
@@ -21,8 +23,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('expense_vouchers', function (Blueprint $table) {
-            $table->dropColumn('date');
-        });
+        if (Schema::hasColumn('expense_vouchers', 'date')) {
+            Schema::table('expense_vouchers', function (Blueprint $table) {
+                $table->dropColumn('date');
+            });
+        }
     }
 };
