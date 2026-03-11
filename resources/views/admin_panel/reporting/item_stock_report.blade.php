@@ -264,11 +264,13 @@ function applyFilter() {
     renderRows(vis);
 }
 
-function formatVal(val, isKg) {
+function formatVal(val, isKg, unit) {
     val = parseFloat(val) || 0;
-    if (!isKg) return fmt(val);
-    // For KG items: backend should send grams already, but as safety:
-    // if value is a small decimal (< 100), it's likely still in KG — convert to grams
+    if (!isKg) {
+        let fmtVal = Number.isInteger(val) ? val : val.toFixed(2);
+        return fmtVal + ' ' + (unit || 'PC');
+    }
+    // For KG items: backend should send grams already
     let grams = val >= 100 ? val : val * 1000;
     if (grams >= 1000) {
         const kg = Math.floor(grams / 1000);
@@ -294,15 +296,15 @@ function renderRows(rows) {
         h+='<tr class="'+rc+'"><td>'+(i+1)+'</td>';
         h+='<td><code style="font-size:11px;background:#f5f5f5;padding:2px 6px;border-radius:4px">'+esc(r.item_code)+'</code></td>';
         h+='<td style="font-weight:600">'+esc(r.item_name)+'</td>';
-        h+='<td class="num">'+formatVal(r.initial_stock, r.is_kg)+'</td>';
-        h+='<td class="num">'+formatVal(r.produced, r.is_kg)+'</td>';
-        h+='<td class="num">'+formatVal(r.purchased, r.is_kg)+'</td>';
-        h+='<td class="num" style="color:#e74c3c">'+formatVal(r.purchase_return, r.is_kg)+'</td>';
-        h+='<td class="num" style="color:#27ae60;font-weight:700">'+(adjInc>0?'+'+formatVal(adjInc,r.is_kg):'–')+'</td>';
-        h+='<td class="num" style="color:#e74c3c;font-weight:700">'+(adjDec>0?'-'+formatVal(adjDec,r.is_kg):'–')+'</td>';
-        h+='<td class="num" style="color:#8e44ad">'+formatVal(r.sold, r.is_kg)+'</td>';
-        h+='<td class="num" style="color:#2980b9">'+formatVal(r.sale_return, r.is_kg)+'</td>';
-        h+='<td class="num '+bc+'">'+formatVal(bal, r.is_kg)+(bal<=0?' ❌':'')+'</td></tr>';
+        h+='<td class="num">'+formatVal(r.initial_stock, r.is_kg, r.unit)+'</td>';
+        h+='<td class="num">'+formatVal(r.produced, r.is_kg, r.unit)+'</td>';
+        h+='<td class="num">'+formatVal(r.purchased, r.is_kg, r.unit)+'</td>';
+        h+='<td class="num" style="color:#e74c3c">'+formatVal(r.purchase_return, r.is_kg, r.unit)+'</td>';
+        h+='<td class="num" style="color:#27ae60;font-weight:700">'+(adjInc>0?'+'+formatVal(adjInc,r.is_kg, r.unit):'–')+'</td>';
+        h+='<td class="num" style="color:#e74c3c;font-weight:700">'+(adjDec>0?'-'+formatVal(adjDec,r.is_kg, r.unit):'–')+'</td>';
+        h+='<td class="num" style="color:#8e44ad">'+formatVal(r.sold, r.is_kg, r.unit)+'</td>';
+        h+='<td class="num" style="color:#2980b9">'+formatVal(r.sale_return, r.is_kg, r.unit)+'</td>';
+        h+='<td class="num '+bc+'">'+formatVal(bal, r.is_kg, r.unit)+(bal<=0?' ❌':'')+'</td></tr>';
     });
     tbody.innerHTML=h;
     setText('rowCount', rows.length+' products');

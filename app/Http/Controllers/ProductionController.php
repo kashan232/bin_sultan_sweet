@@ -70,7 +70,26 @@ class ProductionController extends Controller
                           str_contains($prodName, 'gram') || str_contains($prodName, ' gm') || 
                           $product->unit_type === 'kg';
                 
-                $qtyStock = $isGram ? ($qtyTyped * 1000) : $qtyTyped;
+                $qtyStock = $qtyTyped;
+                $dbVariantId = $variantId;
+
+                if ($isGram) {
+                    $dbVariantId = null; // Always manage stock on the main product for KG
+                    if ($variantId) {
+                        $vModel = \App\Models\ProductVariant::find($variantId);
+                        if ($vModel) {
+                            $kgSize = floatval($vModel->size_value);
+                            // Convert to grams if the variant size is in KG
+                            if ($vModel->size_unit === 'kg') {
+                                $qtyStock = ($kgSize * $qtyTyped * 1000);
+                            } else {
+                                $qtyStock = ($kgSize * $qtyTyped);
+                            }
+                        }
+                    } else {
+                        $qtyStock = $qtyTyped * 1000; // Default conversion if no variant
+                    }
+                }
 
                 DB::table('production_entry_items')->insert([
                     'production_entry_id' => $entryId,
@@ -86,14 +105,11 @@ class ProductionController extends Controller
 
                 // Update Stock
                 $stockQuery = Stock::where('product_id', $productId)
-                    ->where('branch_id', 1); // Default branch
+                    ->where('branch_id', 1)
+                    ->where('warehouse_id', 1); // 🔥 Standardized Warehouse ID
                 
-                // If it's a KG item, always manage stock on the main product, ignore any variant selected (if somehow passed)
-                if ($isGram) {
-                    $stockQuery->whereNull('variant_id');
-                    $variantId = null; // force null for main product stock
-                } elseif ($variantId) {
-                    $stockQuery->where('variant_id', $variantId);
+                if ($dbVariantId) {
+                    $stockQuery->where('variant_id', $dbVariantId);
                 } else {
                     $stockQuery->whereNull('variant_id');
                 }
@@ -106,8 +122,9 @@ class ProductionController extends Controller
                 } else {
                     Stock::create([
                         'product_id' => $productId,
-                        'variant_id' => $variantId,
+                        'variant_id' => $dbVariantId,
                         'branch_id' => 1,
+                        'warehouse_id' => 1, // 🔥 Added Warehouse ID
                         'qty' => $qtyStock,
                     ]);
                 }
@@ -151,12 +168,20 @@ class ProductionController extends Controller
             // 1. Reverse old stock
             $oldItems = DB::table('production_entry_items')->where('production_entry_id', $id)->get();
             foreach ($oldItems as $oi) {
-                $stockQuery = Stock::where('product_id', $oi->product_id)->where('branch_id', 1);
-                if ($oi->variant_id) {
-                    $stockQuery->where('variant_id', $oi->variant_id);
-                } else {
+                // Determine if it was a main-product stock item (KG logic)
+                $oldProduct = Product::find($oi->product_id);
+                $oldIsGram = $oldProduct && ($oldProduct->unit_type === 'kg' || str_contains(strtolower($oldProduct->item_name), 'gram'));
+                
+                $stockQuery = Stock::where('product_id', $oi->product_id)
+                    ->where('branch_id', 1)
+                    ->where('warehouse_id', 1);
+
+                if ($oldIsGram || !$oi->variant_id) {
                     $stockQuery->whereNull('variant_id');
+                } else {
+                    $stockQuery->where('variant_id', $oi->variant_id);
                 }
+
                 $stock = $stockQuery->first();
                 if ($stock) {
                     $stock->qty -= $oi->qty_stock;
@@ -193,7 +218,25 @@ class ProductionController extends Controller
                           str_contains($prodName, 'gram') || str_contains($prodName, ' gm') ||
                           $product->unit_type === 'kg';
 
-                $qtyStock = $isGram ? ($qtyTyped * 1000) : $qtyTyped;
+                $qtyStock = $qtyTyped;
+                $dbVariantId = $variantId;
+
+                if ($isGram) {
+                    $dbVariantId = null;
+                    if ($variantId) {
+                        $vModel = \App\Models\ProductVariant::find($variantId);
+                        if ($vModel) {
+                            $kgSize = floatval($vModel->size_value);
+                            if ($vModel->size_unit === 'kg') {
+                                $qtyStock = ($kgSize * $qtyTyped * 1000);
+                            } else {
+                                $qtyStock = ($kgSize * $qtyTyped);
+                            }
+                        }
+                    } else {
+                        $qtyStock = $qtyTyped * 1000;
+                    }
+                }
 
                 DB::table('production_entry_items')->insert([
                     'production_entry_id' => $id,
@@ -208,12 +251,12 @@ class ProductionController extends Controller
                 ]);
 
                 // Update Stock
-                $stockQuery = Stock::where('product_id', $productId)->where('branch_id', 1);
-                if ($isGram) {
-                    $stockQuery->whereNull('variant_id');
-                    $variantId = null;
-                } elseif ($variantId) {
-                    $stockQuery->where('variant_id', $variantId);
+                $stockQuery = Stock::where('product_id', $productId)
+                    ->where('branch_id', 1)
+                    ->where('warehouse_id', 1);
+
+                if ($dbVariantId) {
+                    $stockQuery->where('variant_id', $dbVariantId);
                 } else {
                     $stockQuery->whereNull('variant_id');
                 }
@@ -225,8 +268,9 @@ class ProductionController extends Controller
                 } else {
                     Stock::create([
                         'product_id' => $productId,
-                        'variant_id' => $variantId,
+                        'variant_id' => $dbVariantId,
                         'branch_id' => 1,
+                        'warehouse_id' => 1,
                         'qty' => $qtyStock,
                     ]);
                 }

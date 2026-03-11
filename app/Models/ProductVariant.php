@@ -47,4 +47,9 @@ class ProductVariant extends Model
         $label = $this->size_label ?? $this->variant_name;
         return $label . ' - Rs ' . number_format($this->price);
     }
+
+    public function stock()
+    {
+        return $this->hasOne(Stock::class, 'variant_id');
+    }
 }

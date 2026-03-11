@@ -58,8 +58,10 @@ class ProductController extends Controller
             'unit',
             'brand',
             'stock',
-            'discountProduct'
+            'discountProduct',
+            'variants.stock'
         ])
+            ->withSum('stocks as total_stock', 'qty')
             ->when($search, function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('item_name', 'like', "%{$search}%")

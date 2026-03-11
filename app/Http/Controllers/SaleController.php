@@ -624,7 +624,11 @@ class SaleController extends Controller
                         $vModel = \App\Models\ProductVariant::find($vId);
                         if ($vModel) {
                             $kgSize = floatval($vModel->size_value);
-                            $deductQty = ($kgSize * $qty); // kgSize is already in grams
+                            if ($vModel->size_unit === 'kg') {
+                                $deductQty = ($kgSize * $qty * 1000);
+                            } else {
+                                $deductQty = ($kgSize * $qty);
+                            }
                         }
                     } else {
                         $deductQty = $qty * 1000; // If no variant, assuming qty was inputted in KG
@@ -895,7 +899,11 @@ class SaleController extends Controller
                             $vModel = \App\Models\ProductVariant::find($vId);
                             if ($vModel) {
                                 $kgSize = floatval($vModel->size_value);
-                                $deductQtyDiff = ($kgSize * $qty_diff);
+                                if ($vModel->size_unit === 'kg') {
+                                    $deductQtyDiff = ($kgSize * $qty_diff * 1000);
+                                } else {
+                                    $deductQtyDiff = ($kgSize * $qty_diff);
+                                }
                             }
                         } else {
                             $deductQtyDiff = $qty_diff * 1000;
@@ -943,7 +951,11 @@ class SaleController extends Controller
                             $vModel = \App\Models\ProductVariant::find($vid);
                             if ($vModel) {
                                 $kgSize = floatval($vModel->size_value);
-                                $addBackQty = ($kgSize * $old_qty);
+                                if ($vModel->size_unit === 'kg') {
+                                    $addBackQty = ($kgSize * $old_qty * 1000);
+                                } else {
+                                    $addBackQty = ($kgSize * $old_qty);
+                                }
                             }
                         } else {
                             $addBackQty = $old_qty * 1000;
@@ -1901,26 +1913,49 @@ class SaleController extends Controller
                 // Clear from map so we know it's handled
                 unset($oldMap[$key]);
 
+                $prodModel = \App\Models\Product::find($product_id);
+                $isGram = $prodModel && $prodModel->unit_type === 'kg';
+                
+                $dbVariantId = $vId;
+                $deductQtyDiff = $qty_diff;
+
+                if ($isGram) {
+                    $dbVariantId = null; // Always manage stock on the main product for KG
+                    if ($vId) {
+                        $vModel = \App\Models\ProductVariant::find($vId);
+                        if ($vModel) {
+                            $kgSize = floatval($vModel->size_value);
+                            if ($vModel->size_unit === 'kg') {
+                                $deductQtyDiff = ($kgSize * $qty_diff * 1000);
+                            } else {
+                                $deductQtyDiff = ($kgSize * $qty_diff);
+                            }
+                        }
+                    } else {
+                        $deductQtyDiff = $qty_diff * 1000;
+                    }
+                }
+
                 $stockQuery = \App\Models\Stock::where('product_id', $product_id)
                                                 ->where('branch_id', 1)
                                                 ->where('warehouse_id', 1);
-                if ($vId) {
-                    $stockQuery->where('variant_id', $vId);
+                if ($dbVariantId) {
+                    $stockQuery->where('variant_id', $dbVariantId);
                 } else {
                     $stockQuery->whereNull('variant_id');
                 }
                 $stock = $stockQuery->first();
 
                 if ($stock) {
-                    $stock->qty -= $qty_diff;
+                    $stock->qty -= $deductQtyDiff;
                     $stock->save();
                 } else {
                     \App\Models\Stock::create([
                         'branch_id'  => 1,
                         'warehouse_id' => 1,
                         'product_id' => $product_id,
-                        'variant_id' => $vId ?: null,
-                        'qty'        => -$qty_diff,
+                        'variant_id' => $dbVariantId ?: null,
+                        'qty'        => -$deductQtyDiff,
                     ]);
                 }
             }
@@ -1932,17 +1967,42 @@ class SaleController extends Controller
                 $pid = $parts[0];
                 $vid = $parts[1] === '0' ? null : $parts[1];
 
+                $prodModel = \App\Models\Product::find($pid);
+                $isGram = $prodModel && $prodModel->unit_type === 'kg';
+                
+                $dbVariantId = $vid;
+                $addBackQty = $old_qty;
+
+                if ($isGram) {
+                    $dbVariantId = null;
+                    if ($vid) {
+                        $vModel = \App\Models\ProductVariant::find($vid);
+                        if ($vModel) {
+                            $kgSize = floatval($vModel->size_value);
+                            if ($vModel->size_unit === 'kg') {
+                                $addBackQty = ($kgSize * $old_qty * 1000);
+                            } else {
+                                $addBackQty = ($kgSize * $old_qty);
+                            }
+                        }
+                    } else {
+                        $addBackQty = $old_qty * 1000;
+                    }
+                }
+
                 $stockQuery = \App\Models\Stock::where('product_id', $pid)
                                                 ->where('branch_id', 1)
                                                 ->where('warehouse_id', 1);
-                if ($vid) {
-                    $stockQuery->where('variant_id', $vid);
+                
+                if ($dbVariantId) {
+                    $stockQuery->where('variant_id', $dbVariantId);
                 } else {
                     $stockQuery->whereNull('variant_id');
                 }
+                
                 $stock = $stockQuery->first();
                 if ($stock) {
-                    $stock->qty += $old_qty; // Add back the removed quantity
+                    $stock->qty += $addBackQty; // Add back the removed quantity
                     $stock->save();
                 }
             }

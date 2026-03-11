@@ -34,7 +34,7 @@ class ReportingController extends Controller
         $endDT   = $endDate   . ' 23:59:59';
 
         // 1. Get products and their variants
-        $pQuery = Product::with('variants')->orderBy('item_name');
+        $pQuery = Product::with(['variants', 'unit'])->orderBy('item_name');
 
         if ($productId && $productId !== 'all') {
             $pQuery->where('id', $productId);
@@ -61,8 +61,8 @@ class ReportingController extends Controller
             ->join('production_entries', 'production_entries.id', '=', 'production_entry_items.production_entry_id')
             ->whereIn('production_entry_items.product_id', $productIds)
             ->whereBetween('production_entries.production_date', [$startDate, $endDate])
-            ->select('production_entry_items.product_id', DB::raw('SUM(production_entry_items.qty_stock) as total_qty'))
-            ->groupBy('production_entry_items.product_id')
+            ->select('production_entry_items.product_id', 'production_entry_items.variant_id', DB::raw('SUM(production_entry_items.qty_stock) as total_qty'))
+            ->groupBy('production_entry_items.product_id', 'production_entry_items.variant_id')
             ->get();
 
         $purchaseReturns = DB::table('purchase_return_items')
@@ -80,7 +80,7 @@ class ReportingController extends Controller
 
         // Mapping helper: key = pid_vid
         $mapP = []; foreach($purchases as $p) { $mapP[$p->product_id . '_' . ($p->variant_id ?? '0')] = $p->total_qty; }
-        $mapProd = []; foreach($productions as $pd) { $mapProd[$pd->product_id . '_0'] = ($mapProd[$pd->product_id . '_0'] ?? 0) + $pd->total_qty; }
+        $mapProd = []; foreach($productions as $pd) { $mapProd[$pd->product_id . '_' . ($pd->variant_id ?? '0')] = ($mapProd[$pd->product_id . '_' . ($pd->variant_id ?? '0')] ?? 0) + $pd->total_qty; }
         // purchase_return_items has no variant_id — map by product only (key pid_0)
         $mapPR = []; foreach($purchaseReturns as $pr) { $mapPR[$pr->product_id . '_0'] = ($mapPR[$pr->product_id . '_0'] ?? 0) + $pr->total_qty; }
         $mapS = []; foreach($currStocks as $cs) { $mapS[$cs->product_id . '_' . ($cs->variant_id ?? '0')] = $cs->qty; }
@@ -146,10 +146,10 @@ class ReportingController extends Controller
             ->join('production_entries', 'production_entries.id', '=', 'production_entry_items.production_entry_id')
             ->whereIn('production_entry_items.product_id', $productIds)
             ->where('production_entries.production_date', '>', $endDate)
-            ->select('production_entry_items.product_id', DB::raw('SUM(production_entry_items.qty_stock) as total_qty'))
-            ->groupBy('production_entry_items.product_id')
+            ->select('production_entry_items.product_id', 'production_entry_items.variant_id', DB::raw('SUM(production_entry_items.qty_stock) as total_qty'))
+            ->groupBy('production_entry_items.product_id', 'production_entry_items.variant_id')
             ->get();
-        $mapProdAft = []; foreach($prodAfter as $pd) { $mapProdAft[$pd->product_id . '_0'] = ($mapProdAft[$pd->product_id . '_0'] ?? 0) + $pd->total_qty; }
+        $mapProdAft = []; foreach($prodAfter as $pd) { $mapProdAft[$pd->product_id . '_' . ($pd->variant_id ?? '0')] = ($mapProdAft[$pd->product_id . '_' . ($pd->variant_id ?? '0')] ?? 0) + $pd->total_qty; }
 
         $prAfter = DB::table('purchase_return_items')
             ->join('purchase_returns', 'purchase_returns.id', '=', 'purchase_return_items.purchase_return_id')
@@ -252,7 +252,7 @@ class ReportingController extends Controller
                     $adjDec    = (float)($mapAdjDec[$p->id . '_0'] ?? 0);
 
                     $purchAft = (float)($mapPAft[$key] ?? 0);
-                    $prodAft  = 0; 
+                    $prodAft  = (float)($mapProdAft[$key] ?? 0); 
                     $prAft    = (float)($mapPRAft[$p->id . '_' . $v->id] ?? 0);
                     $soldAft  = (float)($soldAftMap[$key] ?? 0);
                     $sRetAft  = (float)($retAftMap[$key] ?? 0);
@@ -275,6 +275,7 @@ class ReportingController extends Controller
                         'sold'            => $sold,
                         'sale_return'     => $sReturn,
                         'balance'         => $closingStock,
+                        'unit'            => $p->unit->name ?? ($is_kg ? 'KG' : 'PC'),
                     ];
                     $grandTotalValue += $closingStock * (float)($v->wholesale_price ?: $p->wholesale_price);
                 }
@@ -359,6 +360,7 @@ class ReportingController extends Controller
                     'sold'            => $sold,
                     'sale_return'     => $sReturn,
                     'balance'         => $closingStock,
+                    'unit'            => $p->unit->name ?? ($is_kg ? 'KG' : 'PC'),
                 ];
                 $grandTotalValue += $closingStock * (float)$p->wholesale_price;
             }

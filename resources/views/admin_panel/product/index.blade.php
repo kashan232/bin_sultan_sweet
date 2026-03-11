@@ -162,7 +162,16 @@
                             @endif
                         </td>
 
-                        <td>{{ $product->stock->qty ?? '0' }}</td>
+                        <td>
+                            @php
+                                $totalStockValue = $product->total_stock ?? 0;
+                                if (($product->unit_type ?? '') === 'kg') {
+                                    echo number_format($totalStockValue / 1000, 2) . ' KG';
+                                } else {
+                                    echo number_format($totalStockValue);
+                                }
+                            @endphp
+                        </td>
                         <td>{{ $product->brand->name ?? '-' }}</td>
 
                         <td>

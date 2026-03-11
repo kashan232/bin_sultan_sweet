@@ -71,6 +71,11 @@ class Product extends Model
     }
     public function stock()
     {
-        return $this->hasOne(Stock::class);
+        return $this->hasOne(Stock::class)->orderByRaw('variant_id IS NULL DESC, id DESC');
+    }
+
+    public function stocks()
+    {
+        return $this->hasMany(Stock::class);
     }
 }
