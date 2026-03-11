@@ -61,8 +61,9 @@
         <table class="table table-bordered" id="itemsTable">
             <thead class="table-dark">
                 <tr>
-                    <th width="38%">Product</th>
-                    <th>Unit</th>
+                    <th width="32%">Product</th>
+                    <th width="12%">Variant</th>
+                    <th width="10%">Unit</th>
                     <th>Qty (KG/Pcs)</th>
                     <th>Item Note</th>
                     <th width="60px">Del</th>
@@ -76,10 +77,16 @@
                             @foreach($products as $p)
                             <option value="{{ $p->id }}"
                                 data-unit="{{ $p->unit_type === 'kg' ? 'KG' : ($p->unit->name ?? 'Pc') }}"
-                                data-iskg="{{ $p->unit_type === 'kg' ? '1' : '0' }}">
+                                data-iskg="{{ $p->unit_type === 'kg' ? '1' : '0' }}"
+                                data-vars="{{ json_encode($p->variants) }}">
                                 {{ $p->item_code }} - {{ $p->item_name }}
                             </option>
                             @endforeach
+                        </select>
+                    </td>
+                    <td>
+                        <select name="variant_id[]" class="form-control select2-var">
+                            <option value="">-- Main --</option>
                         </select>
                     </td>
                     <td><input type="text" class="form-control unit-disp" readonly></td>
@@ -122,6 +129,7 @@ $(document).ready(function () {
         newRow.find('.conv-disp').text('');
         newRow.find('.select2-container').remove();
         newRow.find('select').val('');
+        newRow.find('.select2-var').html('<option value="">-- Main --</option>');
         $('#itemsBody').append(newRow);
         initSelect2(newRow);
         newRow.find('select').trigger('change');
@@ -137,10 +145,26 @@ $(document).ready(function () {
 
     // Product change
     $(document).on('change', '.select2-prod', function () {
-        let opt = $(this).find(':selected');
-        let row = $(this).closest('tr');
+        let opt  = $(this).find(':selected');
+        let row  = $(this).closest('tr');
+        let vars = opt.data('vars') || [];
+        
         row.find('.unit-disp').val(opt.data('unit') || '');
+        
+        // Populate variants
+        let vSelect = row.find('.select2-var');
+        vSelect.html('<option value="">-- Main --</option>');
+        vars.forEach(v => {
+            let label = v.size_label || v.variant_name || (v.size_value + ' ' + v.size_unit);
+            vSelect.append('<option value="'+v.id+'" data-size="'+v.size_value+'" data-vunit="'+v.size_unit+'">'+label+'</option>');
+        });
+        
         updateConv(row);
+    });
+
+    // Variant change
+    $(document).on('change', '.select2-var', function () {
+        updateConv($(this).closest('tr'));
     });
 
     // Qty change
@@ -149,10 +173,22 @@ $(document).ready(function () {
     });
 
     function updateConv(row) {
-        let isKg = row.find('.select2-prod option:selected').data('iskg') == '1';
-        let qty = parseFloat(row.find('input[name="qty[]"]').val()) || 0;
+        let opt  = row.find('.select2-prod option:selected');
+        let isKg = opt.data('iskg') == '1';
+        let qty  = parseFloat(row.find('input[name="qty[]"]').val()) || 0;
+        
         if (isKg && qty > 0) {
-            row.find('.conv-disp').text('= ' + (qty * 1000).toLocaleString() + ' grams in stock');
+            let vOpt = row.find('.select2-var option:selected');
+            let grams = 0;
+            if (vOpt.val()) {
+                let size = parseFloat(vOpt.data('size')) || 0;
+                let vUnit = vOpt.data('vunit');
+                if (vUnit === 'kg') grams = (size * qty * 1000);
+                else grams = (size * qty);
+            } else {
+                grams = (qty * 1000);
+            }
+            row.find('.conv-disp').text('= ' + Math.round(grams).toLocaleString() + ' grams in stock');
         } else {
             row.find('.conv-disp').text('');
         }
@@ -173,6 +209,7 @@ $(document).ready(function () {
 
     function initSelect2(row) {
         row.find('.select2-prod').select2({ width: '100%', placeholder: 'Search product...' });
+        row.find('.select2-var').select2({ width: '100%' });
     }
 });
 </script>

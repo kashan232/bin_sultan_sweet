@@ -65,7 +65,12 @@
                         @endphp
                         <tr>
                             <td>{{ $i + 1 }}</td>
-                            <td><strong>{{ optional($item->product)->item_name }}</strong></td>
+                            <td>
+                                <strong>{{ optional($item->product)->item_name }}</strong>
+                                @if($item->variant)
+                                    <br><small class="text-muted">({{ $item->variant->size_label ?: $item->variant->variant_name }})</small>
+                                @endif
+                            </td>
                             <td>{{ optional($item->product)->item_code }}</td>
                             <td>{{ $item->unit }}</td>
                             <td><strong>{{ $qtyFmt }}</strong></td>

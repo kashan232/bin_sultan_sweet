@@ -125,7 +125,12 @@
                             @endif
                         </td>
                         <td>{{ $row->reason }}</td>
-                        <td><strong>{{ $row->item_name }}</strong></td>
+                        <td>
+                            <strong>{{ $row->item_name }}</strong>
+                            @if($row->size_label || $row->variant_name)
+                                <br><small class="text-muted">({{ $row->size_label ?: $row->variant_name }})</small>
+                            @endif
+                        </td>
                         <td>{{ $row->item_code }}</td>
                         <td><strong>{{ $qtyFmt }}</strong></td>
                         <td>

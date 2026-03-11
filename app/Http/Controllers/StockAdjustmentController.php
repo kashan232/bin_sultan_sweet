@@ -15,7 +15,7 @@ class StockAdjustmentController extends Controller
 {
     public function index(Request $request)
     {
-        $query = StockAdjustment::with('user')
+        $query = StockAdjustment::with(['user', 'items.product', 'items.variant'])
             ->orderBy('created_at', 'desc');
 
         if ($request->from_date) {
@@ -35,7 +35,7 @@ class StockAdjustmentController extends Controller
 
     public function create()
     {
-        $products = Product::with('unit')->orderBy('item_name')->get();
+        $products = Product::with(['unit', 'variants'])->orderBy('item_name')->get();
         return view('admin_panel.stock_adjustment.create', compact('products'));
     }
 
@@ -68,52 +68,75 @@ class StockAdjustmentController extends Controller
                 $qty = (float)($request->qty[$idx] ?? 0);
                 if (!$productId || $qty <= 0) continue;
 
-                $product  = Product::with('unit')->find($productId);
-                if (!$product) continue;
-
-                $unitName = strtolower($product->unit->name ?? '');
-                $isKg     = $product->unit_type === 'kg'
-                    || str_contains($unitName, 'gram')
-                    || str_contains($unitName, 'gm');
-
-                $qtyStock = $isKg ? ($qty * 1000) : $qty;
-                $variantId = $request->variant_id[$idx] ?? null;
-                if ($variantId === '') $variantId = null;
-
-                StockAdjustmentItem::create([
-                    'adjustment_id' => $adjustment->id,
-                    'product_id'    => $productId,
-                    'variant_id'    => $variantId,
-                    'unit'          => $product->unit->name ?? 'Pc',
-                    'qty'           => $qty,
-                    'qty_stock'     => $qtyStock,
-                    'notes'         => $request->item_note[$idx] ?? null,
-                ]);
-
-                // Apply stock adjustment
-                $stockQuery = Stock::where('product_id', $productId)->where('branch_id', 1);
-                if ($variantId) {
-                    $stockQuery->where('variant_id', $variantId);
-                } else {
-                    $stockQuery->whereNull('variant_id');
-                }
-                $stock = $stockQuery->first();
-
-                if ($stock) {
-                    if ($request->type === 'increase') {
-                        $stock->qty += $qtyStock;
-                    } else {
-                        $stock->qty = max(0, $stock->qty - $qtyStock);
-                    }
-                    $stock->save();
-                } elseif ($request->type === 'increase') {
-                    Stock::create([
-                        'product_id' => $productId,
-                        'variant_id' => $variantId,
-                        'branch_id'  => 1,
-                        'qty'        => $qtyStock,
-                    ]);
-                }
+                 $product = Product::with('unit')->find($productId);
+                 if (!$product) continue;
+ 
+                 $unitName = strtolower($product->unit->name ?? '');
+                 $isKg = $product->unit_type === 'kg'
+                     || str_contains($unitName, 'gram')
+                     || str_contains($unitName, 'gm');
+ 
+                 $variantId = $request->variant_id[$idx] ?? null;
+                 if ($variantId === '') $variantId = null;
+ 
+                 $dbVariantId = $variantId;
+                 $qtyStock = $qty;
+ 
+                 if ($isKg) {
+                     $dbVariantId = null; // Always adjust main product stock for KG items
+                     if ($variantId) {
+                         $vModel = \App\Models\ProductVariant::find($variantId);
+                         if ($vModel) {
+                             $kgSize = floatval($vModel->size_value);
+                             if ($vModel->size_unit === 'kg') {
+                                 $qtyStock = ($kgSize * $qty * 1000);
+                             } else {
+                                 $qtyStock = ($kgSize * $qty);
+                             }
+                         }
+                     } else {
+                         $qtyStock = $qty * 1000;
+                     }
+                 }
+ 
+                 StockAdjustmentItem::create([
+                     'adjustment_id' => $adjustment->id,
+                     'product_id'    => $productId,
+                     'variant_id'    => $variantId,
+                     'unit'          => $product->unit->name ?? 'Pc',
+                     'qty'           => $qty,
+                     'qty_stock'     => $qtyStock,
+                     'notes'         => $request->item_note[$idx] ?? null,
+                 ]);
+ 
+                 // Apply stock adjustment
+                 $stockQuery = Stock::where('product_id', $productId)
+                     ->where('branch_id', 1)
+                     ->where('warehouse_id', 1);
+ 
+                 if ($dbVariantId) {
+                     $stockQuery->where('variant_id', $dbVariantId);
+                 } else {
+                     $stockQuery->whereNull('variant_id');
+                 }
+                 $stock = $stockQuery->first();
+ 
+                 if ($stock) {
+                     if ($request->type === 'increase') {
+                         $stock->qty += $qtyStock;
+                     } else {
+                         $stock->qty = max(0, $stock->qty - $qtyStock);
+                     }
+                     $stock->save();
+                 } elseif ($request->type === 'increase') {
+                     Stock::create([
+                         'branch_id'    => 1,
+                         'warehouse_id' => 1,
+                         'product_id'   => $productId,
+                         'variant_id'   => $dbVariantId,
+                         'qty'          => $qtyStock,
+                     ]);
+                 }
             }
 
             DB::commit();
@@ -127,7 +150,7 @@ class StockAdjustmentController extends Controller
 
     public function show($id)
     {
-        $adjustment = StockAdjustment::with(['user', 'items.product'])->findOrFail($id);
+        $adjustment = StockAdjustment::with(['user', 'items.product', 'items.variant'])->findOrFail($id);
         return view('admin_panel.stock_adjustment.show', compact('adjustment'));
     }
 
@@ -140,13 +163,15 @@ class StockAdjustmentController extends Controller
         $query = DB::table('stock_adjustment_items as sai')
             ->join('stock_adjustments as sa', 'sa.id', '=', 'sai.adjustment_id')
             ->join('products as p', 'p.id', '=', 'sai.product_id')
+            ->leftJoin('product_variants as pv', 'pv.id', '=', 'sai.variant_id')
             ->leftJoin('users as u', 'u.id', '=', 'sa.created_by')
             ->whereBetween('sa.adjustment_date', [$from, $to])
             ->select(
                 'sa.ref_no', 'sa.adjustment_date', 'sa.type', 'sa.reason',
                 'p.item_name', 'p.item_code', 'p.unit_type',
                 'sai.qty', 'sai.qty_stock', 'sai.unit', 'sai.notes as item_note',
-                'sa.notes as adj_note', 'u.name as user_name'
+                'sa.notes as adj_note', 'u.name as user_name',
+                'pv.size_label', 'pv.variant_name'
             )
             ->orderBy('sa.adjustment_date', 'desc')
             ->orderBy('sa.id', 'desc');

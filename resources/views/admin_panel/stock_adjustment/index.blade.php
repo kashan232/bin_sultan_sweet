@@ -74,13 +74,27 @@
                         </td>
                         <td>{{ $adj->reason }}</td>
                         <td>
-                            @php $cnt = \App\Models\StockAdjustmentItem::where('adjustment_id', $adj->id)->count(); @endphp
-                            <span class="badge bg-secondary">{{ $cnt }} items</span>
+                            @foreach($adj->items as $item)
+                                @php
+                                    $isKg = optional($item->product)->unit_type === 'kg';
+                                    $qty = (float)$item->qty;
+                                    if ($isKg) {
+                                        $kg = floor($qty); $gm = round(($qty - $kg) * 1000);
+                                        $qtyFmt = ($kg > 0 ? $kg.'kg ' : '') . ($gm > 0 ? $gm.'g' : ($kg > 0 ? '' : '0g'));
+                                    } else {
+                                        $qtyFmt = number_format($qty, 0) . ' ' . $item->unit;
+                                    }
+                                @endphp
+                                <div class="text-nowrap mb-1" style="font-size: 11px;">
+                                    <strong>{{ optional($item->product)->item_name }}</strong> : <span class="badge bg-light text-dark border">{{ $qtyFmt }}</span>
+                                    @if($item->variant) <small class="text-muted d-block">({{ $item->variant->size_label ?: $item->variant->variant_name }})</small> @endif
+                                </div>
+                            @endforeach
                         </td>
                         <td>{{ optional($adj->user)->name ?? 'System' }}</td>
                         <td>{{ Str::limit($adj->notes, 40) }}</td>
-                        <td>
-                            <a href="{{ route('stock-adjustment.show', $adj->id) }}" class="btn btn-info btn-sm"><i class="fas fa-eye"></i></a>
+                        <td class="text-center">
+                            <a href="{{ route('stock-adjustment.show', $adj->id) }}" class="btn btn-info btn-sm" title="View Detail"><i class="fas fa-eye"></i> View</a>
                         </td>
                     </tr>
                     @empty
