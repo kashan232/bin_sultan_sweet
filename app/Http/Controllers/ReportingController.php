@@ -243,7 +243,7 @@ class ReportingController extends Controller
                     
                     $purchased = (float)($mapP[$key] ?? 0);
                     $produced  = (float)($mapProd[$key] ?? 0);
-                    $pReturn   = (float)($mapPR[$p->id . '_' . $v->id] ?? 0); 
+                    $pReturn   = (float)($mapPR[$p->id . '_0'] ?? 0); 
                     if ($pReturn == 0) { }
                     $sold      = (float)($soldMap[$key] ?? 0);
                     $sReturn   = (float)($retMap[$key] ?? 0);
@@ -253,7 +253,7 @@ class ReportingController extends Controller
 
                     $purchAft = (float)($mapPAft[$key] ?? 0);
                     $prodAft  = (float)($mapProdAft[$key] ?? 0); 
-                    $prAft    = (float)($mapPRAft[$p->id . '_' . $v->id] ?? 0);
+                    $prAft    = (float)($mapPRAft[$p->id . '_0'] ?? 0);
                     $soldAft  = (float)($soldAftMap[$key] ?? 0);
                     $sRetAft  = (float)($retAftMap[$key] ?? 0);
                     $adjIncAft = (float)($mapAdjIncAft[$p->id . '_0'] ?? 0);
@@ -322,20 +322,33 @@ class ReportingController extends Controller
                     // Accumulate all variants into base for KG items
                     foreach ($p->variants as $v) {
                         $vKey = $p->id . '_' . $v->id;
-                        $mul = floatval($v->size_value); // size_value is in grams
+                        $mul = floatval($v->size_value); 
+                        
+                        // If variant size is in KG, multiply by 1000 to get grams
+                        if ($v->size_unit === 'kg') {
+                            $mul *= 1000;
+                        }
 
-                        $purchased += (float)($mapP[$vKey] ?? 0) * 1000; // variant purchase qty is also in KG
+                        $vPurchRaw = (float)($mapP[$vKey] ?? 0);
+                        $vPurchAftRaw = (float)($mapPAft[$vKey] ?? 0);
+
+                        // Assuming purchase qty for KG items is in KG
+                        $purchased += $vPurchRaw * 1000;
+                        $purchAft  += $vPurchAftRaw * 1000;
+
                         $produced  += (float)($mapProd[$vKey] ?? 0);
-                        $pReturn   += (float)($mapPR[$p->id . '_' . $v->id] ?? 0);
-                        $sold      += (float)($soldMap[$vKey] ?? 0) * $mul;
-                        $sReturn   += (float)($retMap[$vKey] ?? 0) * $mul;
-                        $balance   += (float)($mapS[$vKey] ?? 0);
+                        $prodAft   += (float)($mapProdAft[$vKey] ?? 0);
 
-                        $purchAft += (float)($mapPAft[$vKey] ?? 0) * 1000;
-                        $prodAft  += 0; 
-                        $prAft    += (float)($mapPRAft[$p->id . '_' . $v->id] ?? 0);
-                        $soldAft  += (float)($soldAftMap[$vKey] ?? 0) * $mul;
-                        $sRetAft  += (float)($retAftMap[$vKey] ?? 0) * $mul;
+                        $pReturn   += (float)($mapPR[$vKey] ?? 0);
+                        $prAft     += (float)($mapPRAft[$vKey] ?? 0);
+
+                        $sold      += (float)($soldMap[$vKey] ?? 0) * $mul;
+                        $soldAft   += (float)($soldAftMap[$vKey] ?? 0) * $mul;
+
+                        $sReturn   += (float)($retMap[$vKey] ?? 0) * $mul;
+                        $sRetAft   += (float)($retAftMap[$vKey] ?? 0) * $mul;
+
+                        $balance   += (float)($mapS[$vKey] ?? 0);
                     }
                 }
 
@@ -362,7 +375,9 @@ class ReportingController extends Controller
                     'balance'         => $closingStock,
                     'unit'            => $p->unit->name ?? ($is_kg ? 'KG' : 'PC'),
                 ];
-                $grandTotalValue += $closingStock * (float)$p->wholesale_price;
+                
+                $valuationQty = $is_kg ? ($closingStock / 1000) : $closingStock;
+                $grandTotalValue += $valuationQty * (float)$p->wholesale_price;
             }
         }
 

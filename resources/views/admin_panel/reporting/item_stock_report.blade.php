@@ -114,6 +114,7 @@ tr.row-low { background:#fffbf0 !important; }
             <div class="isr-card red">   <div class="lbl">Out of Stock</div>  <div class="val" id="cOut">–</div></div>
             <div class="isr-card">       <div class="lbl">Total Sold</div>    <div class="val" id="cSold">–</div></div>
             <div class="isr-card">       <div class="lbl">Total Purchased</div><div class="val" id="cPurch">–</div></div>
+            <div class="isr-card blue" style="border-color:#764ba2"> <div class="lbl">Inventory Value</div><div class="val" id="cValue">–</div></div>
         </div>
 
         {{-- Filter --}}
@@ -253,7 +254,12 @@ function fetchReport() {
     $.ajax({
         url: "{{ route('report.item_stock.fetch') }}", type:'POST', dataType:'json',
         data: { _token:"{{ csrf_token() }}", product_id:productId, start_date:startDate, end_date:endDate },
-        success: function(res) { allRows = res.data || []; document.getElementById('liveSearch').value=''; applyFilter(); updateCards(allRows); },
+        success: function(res) { 
+            allRows = res.data || []; 
+            document.getElementById('liveSearch').value=''; 
+            applyFilter(); 
+            updateCards(res); 
+        },
         error: function(xhr) { document.getElementById('reportBody').innerHTML='<tr><td colspan="10" class="ist-empty" style="color:red">❌ Error. Check console.</td></tr>'; console.error(xhr.responseText); }
     });
 }
@@ -270,14 +276,16 @@ function formatVal(val, isKg, unit) {
         let fmtVal = Number.isInteger(val) ? val : val.toFixed(2);
         return fmtVal + ' ' + (unit || 'PC');
     }
-    // For KG items: backend should send grams already
-    let grams = val >= 100 ? val : val * 1000;
+    
+    let isNegative = val < 0;
+    let grams = Math.abs(val);
+
     if (grams >= 1000) {
         const kg = Math.floor(grams / 1000);
         const gm = Math.round(grams % 1000);
-        return `${kg}kg${gm > 0 ? ' ' + gm + 'g' : ''}`;
+        return (isNegative ? '-' : '') + `${kg}kg${gm > 0 ? ' ' + gm + 'g' : ''}`;
     } else if (grams > 0) {
-        return Math.round(grams) + 'g';
+        return (isNegative ? '-' : '') + Math.round(grams) + 'g';
     }
     return '0';
 }
@@ -311,13 +319,21 @@ function renderRows(rows) {
     updateFooter(rows);
 }
 
-function updateCards(rows) {
+function updateCards(res) {
+    const rows = res.data || [];
     setText('cTotal',   rows.length);
     setText('cInStock', rows.filter(r=>parseFloat(r.balance)>5).length);
     setText('cLow',     rows.filter(r=>parseFloat(r.balance)>0&&parseFloat(r.balance)<=5).length);
     setText('cOut',     rows.filter(r=>parseFloat(r.balance)<=0).length);
-    setText('cSold',    fmt(rows.reduce((s,r)=>s+(parseFloat(r.sold)||0),0)));
-    setText('cPurch',   fmt(rows.reduce((s,r)=>s+(parseFloat(r.purchased)||0),0)));
+    
+    // Total Sold/Purchased are tricky with mixed units, so we just show raw sum or sum of pieces/kg separately?
+    // For now keeping it simple as items count.
+    setText('cSold',    rows.length > 0 ? rows.reduce((s,r)=>s+(parseFloat(r.sold)||0),0).toFixed(0) : '0');
+    setText('cPurch',   rows.length > 0 ? rows.reduce((s,r)=>s+(parseFloat(r.purchased)||0),0).toFixed(0) : '0');
+    
+    if (res.grand_total !== undefined) {
+        setText('cValue', 'Rs ' + Math.round(res.grand_total).toLocaleString());
+    }
 }
 
 function updateFooter(rows) {
