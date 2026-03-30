@@ -176,7 +176,7 @@ class StockTransferController extends Controller
                 }
             }
             $transfer = StockTransfer::create([
-                'from_warehouse_id' => $fromWarehouse === 'Shop' ? 0 : $fromWarehouse,
+                'from_warehouse_id' => $fromWarehouse === 'Shop' ? null : $fromWarehouse,
                 'transfer_to'       => $transferTo,
                 'to_warehouse_id'   => $transferTo === 'warehouse' ? $toWarehouse : null,
                 'product_id'        => json_encode(array_values(array_filter($productIds))),
