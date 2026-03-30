@@ -16,7 +16,7 @@ class ProductionController extends Controller
             ->leftJoin('users as u', 'u.id', '=', 'pe.created_by')
             ->select('pe.*', 'u.name as user_name', 
                 DB::raw('(SELECT COUNT(*) FROM production_entry_items WHERE production_entry_id = pe.id) as items_count'),
-                DB::raw("(SELECT GROUP_CONCAT(CONCAT(p.item_name, ' (', pei.qty_entered, ' ', pei.unit, ')') SEPARATOR ', ') FROM production_entry_items pei JOIN products p ON p.id = pei.product_id WHERE pei.production_entry_id = pe.id) as product_details")
+                DB::raw("(SELECT GROUP_CONCAT(CONCAT(p.item_name, IF(pv.size_label IS NULL AND pv.variant_name IS NULL, '', CONCAT(' ', COALESCE(pv.size_label, pv.variant_name))), ' (', pei.qty_entered, ' ', pei.unit, ')') SEPARATOR ', ') FROM production_entry_items pei JOIN products p ON p.id = pei.product_id LEFT JOIN product_variants pv ON pv.id = pei.variant_id WHERE pei.production_entry_id = pe.id) as product_details")
             )
             ->orderBy('pe.created_at', 'desc')
             ->get();
@@ -296,8 +296,9 @@ class ProductionController extends Controller
 
         $items = DB::table('production_entry_items as pei')
             ->leftJoin('products as p', 'p.id', '=', 'pei.product_id')
+            ->leftJoin('product_variants as pv', 'pv.id', '=', 'pei.variant_id')
             ->where('pei.production_entry_id', $id)
-            ->select('pei.*', 'p.item_name', 'p.item_code', 'p.unit_type')
+            ->select('pei.*', 'p.item_name', 'p.item_code', 'p.unit_type', 'pv.size_label', 'pv.variant_name')
             ->get();
 
         return view('admin_panel.production.gatepass', compact('entry', 'items'));

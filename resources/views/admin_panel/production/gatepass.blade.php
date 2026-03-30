@@ -119,7 +119,12 @@
             <tr>
                 <td>{{ $sno }}</td>
                 <td>
-                    <div class="item-name">{{ $item->item_name }}</div>
+                    <div class="item-name">
+                        {{ $item->item_name }} 
+                        @if($item->size_label || $item->variant_name)
+                            ({{ $item->size_label ?: $item->variant_name }})
+                        @endif
+                    </div>
                     <div class="item-code">[{{ $item->item_code }}]</div>
                 </td>
                 <td class="r" style="font-size:16px; font-weight:900;">{{ $qtyDisplay }}</td>
