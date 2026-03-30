@@ -547,10 +547,10 @@ class ReportingController extends Controller
                 'inward_gatepass_items.qty',
                 DB::raw('products.unit_id as unit'),
                 // Use the specific transaction price from the item table, not master product price
-                DB::raw('COALESCE(inward_gatepass_items.price, products.wholesale_price) as price'), 
-                'inward_gatepass_items.discount_value as item_discount',
-                // Calculate line total using the transaction price and subtracting discount
-                DB::raw('((COALESCE(inward_gatepass_items.price, products.wholesale_price) - COALESCE(inward_gatepass_items.discount_value, 0)) * inward_gatepass_items.qty) as line_total'),
+                DB::raw('COALESCE(inward_gatepass_items.price, products.wholesale_price) as price'),
+                DB::raw('0 as item_discount'),
+                // Calculate line total using the transaction price (no discount supported on inward items currently)
+                DB::raw('(COALESCE(inward_gatepass_items.price, products.wholesale_price) * inward_gatepass_items.qty) as line_total'),
                 'inward_gatepasses.subtotal',
                 'inward_gatepasses.discount',
                 'inward_gatepasses.extra_cost',
