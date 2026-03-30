@@ -561,15 +561,22 @@ class ReportingController extends Controller
 
 
         if ($startDate && $endDate) {
-            $inwardQuery->whereBetween('inward_gatepasses.gatepass_date', [$startDate, $endDate]);
+            $inwardQuery->whereBetween('gatepass_date', [$startDate, $endDate]);
         }
 
         /* ================= UNION ================= */
         $data = $purchaseQuery
             ->unionAll($inwardQuery)
-            ->orderBy('purchase_date', 'desc')
-            ->orderBy('invoice_no', 'desc') // Ensure items of same invoice stay together
-            ->get();
+            ->get()
+            ->sort(function($a, $b) {
+                if ($a->purchase_date === $b->purchase_date) {
+                    // Secondary: invoice_no desc
+                    return strcmp($b->invoice_no, $a->invoice_no);
+                }
+                // Primary: purchase_date desc
+                return strcmp($b->purchase_date, $a->purchase_date);
+            })
+            ->values();
 
         // 🔹 Post-processing to remove duplicate invoice totals
         $seenInvoices = [];
