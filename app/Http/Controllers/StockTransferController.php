@@ -7,8 +7,10 @@ use App\Models\StockTransfer;
 use App\Models\WarehouseStock;
 use App\Models\Warehouse;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Stock;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class StockTransferController extends Controller
 {
@@ -24,49 +26,28 @@ class StockTransferController extends Controller
             })
             ->get()
             ->map(function ($transfer) {
+                $productIds = is_array($transfer->product_id) ? $transfer->product_id : (json_decode($transfer->product_id, true) ?: []);
+                $variantIds = is_array($transfer->variant_id) ? $transfer->variant_id : (json_decode($transfer->variant_id, true) ?: []);
+                $quantities = is_array($transfer->quantity) ? $transfer->quantity : (json_decode($transfer->quantity, true) ?: []);
 
-                // 🔐 SAFE decode
-                if (is_string($transfer->product_id)) {
-                    $productIds = json_decode($transfer->product_id, true);
-                } elseif (is_array($transfer->product_id)) {
-                    $productIds = $transfer->product_id;
-                } else {
-                    $productIds = [];
-                }
-
-                if (is_string($transfer->quantity)) {
-                    $quantities = json_decode($transfer->quantity, true);
-                } elseif (is_array($transfer->quantity)) {
-                    $quantities = $transfer->quantity;
-                } else {
-                    $quantities = [];
-                }
-
-                // ensure arrays
-                $productIds = is_array($productIds) ? $productIds : [];
-                $quantities = is_array($quantities) ? $quantities : [];
-
-                // product_id => qty map
-                $qtyMap = [];
+                $items = [];
                 foreach ($productIds as $i => $pid) {
-                    $qtyMap[(int)$pid] = (float) ($quantities[$i] ?? 0);
-                }
-
-                // products in SAME order
-                $items = \App\Models\Product::whereIn('id', $productIds)
-                    ->get()
-                    ->sortBy(fn($p) => array_search($p->id, $productIds))
-                    ->values()
-                    ->map(function ($product) use ($qtyMap) {
-                        return [
-                            'name' => $product->item_name,
-                            'qty'  => $qtyMap[$product->id] ?? 0,
+                    $vid = $variantIds[$i] ?? null;
+                    $qty = (float) ($quantities[$i] ?? 0);
+                    
+                    $product = Product::find($pid);
+                    $variant = $vid ? ProductVariant::find($vid) : null;
+                    
+                    if ($product) {
+                        $items[] = [
+                            'name' => $product->item_name . ($variant ? ' (' . $variant->variant_name . ')' : ''),
+                            'qty'  => $qty,
                             'unit' => $product->unit_id,
                         ];
-                    });
+                    }
+                }
 
-                $transfer->items = $items;
-
+                $transfer->items = collect($items);
                 return $transfer;
             });
 
@@ -76,13 +57,10 @@ class StockTransferController extends Controller
         );
     }
 
-
-
-
     public function create()
     {
         $warehouses = Warehouse::all();
-        $products = Product::all();
+        $products = Product::with('variants')->get();
         return view('admin_panel.warehouses.stock_transfers.create', compact('warehouses', 'products'));
     }
 
@@ -90,6 +68,7 @@ class StockTransferController extends Controller
     {
         try {
             $productIds = $request->product_id;
+            $variantIds = $request->variant_id;
             $quantities = $request->quantity;
 
             $request->validate([
@@ -105,17 +84,15 @@ class StockTransferController extends Controller
             $toWarehouse   = $request->to_warehouse_id;
             $remarks       = $request->remarks;
 
-            $products   = $request->product_id;
-            $quantities = $request->quantity;
+            DB::beginTransaction();
 
             foreach ($productIds as $index => $productId) {
-
-                // skip empty row safely
                 if (empty($productId) || empty($quantities[$index])) {
                     continue;
                 }
 
                 $qty = (float) $quantities[$index];
+                $variantId = $variantIds[$index] ?? null;
 
                 if ($qty <= 0) {
                     continue;
@@ -123,24 +100,23 @@ class StockTransferController extends Controller
 
                 // ---------- SOURCE ----------
                 if ($fromWarehouse !== 'Shop') {
-
                     $sourceStock = WarehouseStock::firstOrCreate(
                         [
                             'warehouse_id' => $fromWarehouse,
-                            'product_id'   => $productId
+                            'product_id'   => $productId,
+                            'variant_id'   => $variantId
                         ],
-                        [
-                            'quantity' => 0,
-                            'price'    => 0
-                        ]
+                        ['quantity' => 0, 'price' => 0]
                     );
 
                     $sourceStock->quantity -= $qty;
                     $sourceStock->save();
                 } else {
-
                     $sourceStock = Stock::firstOrCreate(
-                        ['product_id' => $productId],
+                        [
+                            'product_id' => $productId,
+                            'variant_id' => $variantId
+                        ],
                         ['qty' => 0]
                     );
 
@@ -150,24 +126,23 @@ class StockTransferController extends Controller
 
                 // ---------- DESTINATION ----------
                 if ($transferTo === 'warehouse' && $toWarehouse) {
-
                     $destStock = WarehouseStock::firstOrCreate(
                         [
                             'warehouse_id' => $toWarehouse,
-                            'product_id'   => $productId
+                            'product_id'   => $productId,
+                            'variant_id'   => $variantId
                         ],
-                        [
-                            'quantity' => 0,
-                            'price'    => $sourceStock->price ?? 0
-                        ]
+                        ['quantity' => 0, 'price' => $sourceStock->price ?? 0]
                     );
 
                     $destStock->quantity += $qty;
                     $destStock->save();
                 } elseif ($transferTo === 'shop') {
-
                     $shopStock = Stock::firstOrCreate(
-                        ['product_id' => $productId],
+                        [
+                            'product_id' => $productId,
+                            'variant_id' => $variantId
+                        ],
                         ['qty' => 0]
                     );
 
@@ -175,47 +150,47 @@ class StockTransferController extends Controller
                     $shopStock->save();
                 }
             }
+
             $transfer = StockTransfer::create([
                 'from_warehouse_id' => $fromWarehouse === 'Shop' ? null : $fromWarehouse,
                 'transfer_to'       => $transferTo,
                 'to_warehouse_id'   => $transferTo === 'warehouse' ? $toWarehouse : null,
                 'product_id'        => json_encode(array_values(array_filter($productIds))),
+                'variant_id'        => json_encode(array_values($variantIds)),
                 'quantity'          => json_encode(array_values(array_filter($quantities))),
                 'remarks'           => $remarks,
                 'created_at'        => $request->transfer_date ? \Carbon\Carbon::parse($request->transfer_date) : now(),
                 'updated_at'        => now(),
             ]);
 
+            DB::commit();
+
             return redirect()
                 ->route('recipt.warehouse', $transfer->id)
                 ->with('success', 'Stock transferred successfully.');
         } catch (\Throwable $e) {
-
+            DB::rollBack();
             return back()
                 ->withInput()
                 ->with('error', $e->getMessage());
         }
     }
 
-
-
-
-
-
     public function destroy(StockTransfer $stockTransfer)
     {
-        // Optional: reverse the transfer if needed
         return back()->with('error', 'Deleting transfers not allowed.');
     }
+
     public function getStockQuantity(Request $request)
     {
         $productId   = $request->product_id;
-        $warehouseId = $request->warehouse_id; // may be null or "Shop"
+        $variantId   = $request->variant_id;
+        $warehouseId = $request->warehouse_id;
 
-        // WAREHOUSE CASE (ignore "Shop")
         if (!empty($warehouseId) && $warehouseId !== 'Shop') {
-            $stock = \App\Models\WarehouseStock::where('warehouse_id', $warehouseId)
+            $stock = WarehouseStock::where('warehouse_id', $warehouseId)
                 ->where('product_id', $productId)
+                ->where('variant_id', $variantId)
                 ->first();
 
             return response()->json([
@@ -224,8 +199,9 @@ class StockTransferController extends Controller
             ]);
         }
 
-        // SHOP CASE (warehouse_id is null or "Shop")
-        $stock = \App\Models\Stock::where('product_id', $productId)->first();
+        $stock = Stock::where('product_id', $productId)
+            ->where('variant_id', $variantId)
+            ->first();
 
         return response()->json([
             'quantity' => $stock ? $stock->qty : 0,
@@ -233,43 +209,40 @@ class StockTransferController extends Controller
         ]);
     }
 
-
-
-
     public function receipt($id)
     {
         $transfer = StockTransfer::with(['fromWarehouse', 'toWarehouse'])
             ->findOrFail($id);
 
-        $productIds = json_decode($transfer->product_id, true) ?? [];
-        $quantities = json_decode($transfer->quantity, true) ?? [];
+        $productIds = is_array($transfer->product_id) ? $transfer->product_id : (json_decode($transfer->product_id, true) ?: []);
+        $variantIds = is_array($transfer->variant_id) ? $transfer->variant_id : (json_decode($transfer->variant_id, true) ?: []);
+        $quantities = is_array($transfer->quantity) ? $transfer->quantity : (json_decode($transfer->quantity, true) ?: []);
 
-        // Product ID => Qty
-        $qtyMap = [];
-        foreach ($productIds as $i => $pid) {
-            $qtyMap[(int)$pid] = (float) ($quantities[$i] ?? 0);
-        }
-
-        // Products in correct order + attach qty
-        $products = \App\Models\Product::whereIn('id', $productIds)
-            ->get()
-            ->sortBy(fn($p) => array_search($p->id, $productIds))
-            ->values()
-            ->map(function ($product) use ($qtyMap) {
-                $product->transfer_qty = $qtyMap[$product->id] ?? 0;
-                return $product;
-            });
-
-        /*
-    |--------------------------------------------------------------------------
-    | UNIT WISE TOTAL
-    |--------------------------------------------------------------------------
-    */
+        $items = [];
         $unitTotals = [];
-        foreach ($products as $product) {
-            $unit = $product->unit_id ?? 'Unit';
-            $unitTotals[$unit] = ($unitTotals[$unit] ?? 0) + $product->transfer_qty;
+
+        foreach ($productIds as $i => $pid) {
+            $vid = $variantIds[$i] ?? null;
+            $qty = (float) ($quantities[$i] ?? 0);
+            
+            $product = Product::find($pid);
+            $variant = $vid ? ProductVariant::find($vid) : null;
+            
+            if ($product) {
+                $items[] = (object)[
+                    'item_name' => $product->item_name,
+                    'variant_name' => $variant ? $variant->variant_name : null,
+                    'transfer_qty' => $qty,
+                    'unit_id' => $product->unit_id,
+                    'price' => $product->price,
+                ];
+
+                $unit = $product->unit_id ?? 'Unit';
+                $unitTotals[$unit] = ($unitTotals[$unit] ?? 0) + $qty;
+            }
         }
+
+        $products = collect($items);
 
         return view(
             'admin_panel.warehouses.stock_transfers.receipt',
@@ -277,15 +250,9 @@ class StockTransferController extends Controller
         );
     }
 
-    // ------------------------------------------------------------------
-    // NOTIFICATION LOGIC
-    // ------------------------------------------------------------------
-
     public function checkNewTransfers()
     {
-        // Only trigger for admin
-        if (auth()->check() && auth()->user()->email === 'admin@admin.com') {
-            
+        if (Auth::check() && Auth::user()->email === 'admin@admin.com') {
             $newTransfers = StockTransfer::with(['fromWarehouse', 'toWarehouse'])
                 ->where('admin_notified', 0)
                 ->orderBy('created_at', 'desc')
@@ -298,7 +265,7 @@ class StockTransferController extends Controller
 
     public function markTransfersNotified(Request $request)
     {
-        if (auth()->check() && auth()->user()->email === 'admin@admin.com') {
+        if (Auth::check() && Auth::user()->email === 'admin@admin.com') {
             $ids = $request->input('ids', []);
             if (!empty($ids)) {
                 StockTransfer::whereIn('id', $ids)->update(['admin_notified' => 1]);

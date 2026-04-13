@@ -118,7 +118,6 @@ class SaleController extends Controller
             $sales = $query->skip($skip)->take($take)->get();
 
             // 🔹 Optimized Product Fetching (Avoid N+1)
-            // Extract all unique product IDs from the current page sales
             $allProductIds = [];
             foreach ($sales as $sale) {
                 if(!empty($sale->product)) {
@@ -127,9 +126,19 @@ class SaleController extends Controller
                 }
             }
             $allProductIds = array_unique($allProductIds);
-            
-            // Fetch all needed products in one query
+
+            // Fetch all needed products and variants in one query
             $productsMap = \App\Models\Product::whereIn('id', $allProductIds)->get()->keyBy('id');
+            
+            $allVariantIds = [];
+            foreach ($sales as $sale) {
+                if(!empty($sale->variant_id)) {
+                    $vids = explode(',', $sale->variant_id);
+                    foreach($vids as $vid) if($vid) $allVariantIds[] = trim($vid);
+                }
+            }
+            $allVariantIds = array_unique($allVariantIds);
+            $variantsMap = \App\Models\ProductVariant::whereIn('id', $allVariantIds)->get()->keyBy('id');
 
             // 🔹 Transform Data
             $data = [];
@@ -141,15 +150,23 @@ class SaleController extends Controller
                 $prices = explode(',', $sale->per_price);
                 $discounts = explode(',', $sale->per_discount);
                 $totals = explode(',', $sale->per_total);
+                $vIds = explode(',', $sale->variant_id);
                 
-                // Build HTML for products column
                 $barcodeHtml = '';
                 $productHtml = '';
                 
-                foreach($prodIds as $pid) {
+                foreach($prodIds as $i => $pid) {
                     $p = $productsMap[$pid] ?? null;
+                    $vId = $vIds[$i] ?? null;
+                    $v = $vId ? ($variantsMap[$vId] ?? null) : null;
+                    
                     $barcodeHtml .= ($p ? $p->barcode_path : 'N/A') . '<br>';
-                    $productHtml .= ($p ? $p->item_name : 'N/A') . '<br>';
+                    
+                    $pName = $p ? $p->item_name : 'N/A';
+                    if ($v) {
+                        $pName .= ' (' . ($v->size_label ?: $v->variant_name) . ')';
+                    }
+                    $productHtml .= $pName . '<br>';
                 }
 
                 // Helper closure for formatting
@@ -242,7 +259,8 @@ class SaleController extends Controller
         $catId   = $request->get('category_id', '');
         $perPage = (int) $request->get('per_page', 60);
 
-        $query = Product::with(['brand', 'stock', 'variants', 'activeDiscount', 'category_relation']);
+        $query = Product::with(['brand', 'stock', 'variants', 'activeDiscount', 'category_relation'])
+            ->withSum('stocks as total_stock', 'qty');
 
         if ($q !== '') {
             $query->where(function ($sub) use ($q) {
@@ -262,7 +280,7 @@ class SaleController extends Controller
             if ($product->activeDiscount) {
                 $price = (float) ($product->activeDiscount->final_price ?? $price);
             }
-            $stock    = $product->stock ? (float) $product->stock->qty : 0;
+            $stock    = (float) ($product->total_stock ?? 0);
             $imageUrl = $product->image
                 ? asset('uploads/products/' . $product->image)
                 : null;
@@ -648,13 +666,22 @@ class SaleController extends Controller
                         $stock->qty = $stock->qty - $deductQty;
                         $stock->save();
                     } else {
-                        \App\Models\Stock::create([
+                        $stock = \App\Models\Stock::create([
                             'branch_id'  => 1,
                             'warehouse_id' => 1,
                             'product_id' => $product_id,
                             'variant_id' => $dbVariantId,
                             'qty'        => 0 - $deductQty,
                         ]);
+                    }
+
+                    // 🔹 Sync with legacy/display stock column on variants table
+                    if ($vId) {
+                        $vModel = \App\Models\ProductVariant::find($vId);
+                        if ($vModel) {
+                            $vModel->stock_qty -= $qty; // Qty here is the primary unit quantity
+                            $vModel->save();
+                        }
                     }
                 }
                 $total_items += $qty;

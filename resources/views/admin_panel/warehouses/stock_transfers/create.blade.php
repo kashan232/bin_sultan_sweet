@@ -206,6 +206,7 @@
                             <tr class="product_row">
                                 <td style="position:relative">
                                     <input type="hidden" name="product_id[]" class="product_id">
+                                    <input type="hidden" name="variant_id[]" class="variant_id">
                                     <input type="text" class="form-control productSearch" placeholder="Select product from Search (F2)" readonly>
                                 </td>
                                 <td>
@@ -279,6 +280,7 @@
 <tr class="product_row">
     <td style="position:relative">
         <input type="hidden" name="product_id[]" class="product_id">
+        <input type="hidden" name="variant_id[]" class="variant_id">
         <input type="text" class="form-control productSearch" placeholder="Select product from Search (F2)" readonly>
     </td>
     <td>
@@ -428,7 +430,8 @@
                     // WAREHOUSE CASE
                     $.get('/warehouse-stock-quantity', {
                         warehouse_id: fromWarehouse,
-                        product_id: selectedProduct
+                        product_id: selectedProduct,
+                        variant_id: $currentRow.find('.variant_id').val()
                     }, function(response) {
                         $currentRow.find('.stock').val(response.quantity ?? 0);
                     });
@@ -436,10 +439,11 @@
                     // SHOP CASE
                     $.get('/warehouse-stock-quantity', {
                         warehouse_id: null, // blank ya null bhejna zaruri
-                        product_id: selectedProduct
+                        product_id: selectedProduct,
+                        variant_id: $currentRow.find('.variant_id').val()
                     }, function(response) {
                         $currentRow.find('.stock').val(response.quantity ?? 0);
-                        $row.find('.quantity').removeAttr('max');
+                        $currentRow.find('.quantity').removeAttr('max');
                     });
                 }
 
@@ -476,7 +480,8 @@
                     // fetch stock from selected warehouse
                     $.get('/warehouse-stock-quantity', {
                         warehouse_id: fromWarehouse,
-                        product_id: productId
+                        product_id: productId,
+                        variant_id: $row.find('.variant_id').val()
                     }, function(response) {
                         $row.find('.stock').val(response.quantity ?? 0);
                     });
@@ -484,7 +489,8 @@
                     // fetch stock from Shop (warehouse_id = null or handle in controller)
                     $.get('/warehouse-stock-quantity', {
                         warehouse_id: null, // Shop stock
-                        product_id: productId
+                        product_id: productId,
+                        variant_id: $row.find('.variant_id').val()
                     }, function(response) {
                         $row.find('.stock').val(response.quantity ?? 0);
                     });
@@ -702,7 +708,8 @@
             const fromWarehouse = $('#from_warehouse_id').val();
             $.get('/warehouse-stock-quantity', {
                 warehouse_id: (fromWarehouse === 'Shop') ? null : fromWarehouse,
-                product_id: res.id
+                product_id: res.id,
+                variant_id: null
             }, function(stock) {
                 row.find('.stock').val(stock.quantity ?? 0);
             });
@@ -801,6 +808,7 @@
                     html += `
 <li class="list-group-item modal-product-item"
     data-id="${p.id}"
+    data-variant-id="${p.variant_id ?? ''}"
     data-name="${p.item_name}"
     data-code="${p.item_code}"
     data-price="${p.price}"
@@ -864,6 +872,7 @@
         }
 
         row.find('.product_id').val($(this).data('id')).data('barcode', $(this).data('code'));
+        row.find('.variant_id').val($(this).data('variant-id'));
         row.find('.productSearch').val($(this).data('name')).prop('readonly', true);
         row.find('.unit').val($(this).data('unit'));
         row.find('.price').val($(this).data('price'));
@@ -874,7 +883,8 @@
         if (fromWarehouse) {
             $.get('/warehouse-stock-quantity', {
                 warehouse_id: fromWarehouse,
-                product_id: $(this).data('id')
+                product_id: $(this).data('id'),
+                variant_id: $(this).data('variant-id')
             }, function(stock) {
                 row.find('.stock').val(stock.quantity ?? 0);
             });

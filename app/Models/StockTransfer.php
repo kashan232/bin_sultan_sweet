@@ -15,6 +15,7 @@ class StockTransfer extends Model
     protected $casts = [
         'product_id' => 'array',
         'quantity' => 'array',
+        'variant_id' => 'array',
     ];
 
     public function fromWarehouse()

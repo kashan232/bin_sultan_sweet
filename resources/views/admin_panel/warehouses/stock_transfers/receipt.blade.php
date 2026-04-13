@@ -404,8 +404,11 @@
             <td class="center">
               {{ $transfer->toWarehouse->warehouse_name ?? 'Shop' }}
             </td>
-            <td class="center">
-              {{ $product->item_name }} ({{ $product->unit_id }})
+            <td class="item">
+              {{ $product->item_name }}
+              @if($product->variant_name)
+                <br><small>({{ $product->variant_name }})</small>
+              @endif
             </td>
             <td class="qty">{{ number_format($product->transfer_qty, 2) }}</td>
           </tr>
