@@ -325,81 +325,151 @@ class ProductController extends Controller
 
     public function update(Request $request, $id)
     {
-        $product_id = $id;
-        $userId = auth()->id();
-        $imageFilename = null;
-
-        // Image handling (store only filename to stay consistent with create)
-        if ($request->hasFile('image')) {
-            $imageName = time() . '.' . $request->image->extension();
-            $request->image->move(public_path('uploads/products'), $imageName);
-            $imageFilename = $imageName; // ONLY filename
-        } else {
-            $imageFilename = Product::where('id', $product_id)->value('image');
+        if (!Auth::id()) {
+            return redirect()->back();
         }
+        $userId = Auth::id();
+        $product = Product::findOrFail($id);
 
-        // Update product table
-        Product::where('id', $product_id)->update([
-            'creater_id'      => $userId,
-            'category_id'     => $request->category_id,
-            'sub_category_id' => $request->sub_category_id,
-            'item_code'       => $request->item_code,
-            'item_name'       => $request->product_name,
-            'barcode_path'    => $request->barcode_path ?? rand(100000000000, 999999999999),
-            'unit_id'         => $request->unit,
-            'initial_stock'   => $request->Stock,
-            'brand_id'        => $request->brand_id,
-            'wholesale_price' => $request->wholesale_price,
-            'price'           => $request->retail_price,
-            'note'            => $request->note,
-            'alert_quantity'  => $request->alert_quantity,
-            'image'           => $imageFilename,
-            'updated_at'      => now(),
+        // basic validation
+        $request->validate([
+            'product_name'   => 'required|string|max:255|unique:products,item_name,' . $id,
+            'category_id'    => 'nullable|integer',
+            'barcode_path'    => 'nullable|unique:products,barcode_path,' . $id,
+            'sub_category_id' => 'nullable|integer',
+            'unit_type'      => 'required|string|in:kg,piece,pound',
         ]);
 
-        // ===== Update or Insert to stocks table =====
-        // Determine branch & warehouse (use request or defaults)
-        $branchId = $request->branch_id ?? 1;
-        $warehouseId = $request->warehouse_id ?? 1;
-        $newQty = (int) $request->Stock; // sanitize
-
-        // Try to update existing stock row for this product + branch + warehouse
-        $updated = DB::table('stocks')
-            ->where('product_id', $product_id)
-            ->where('branch_id', $branchId)
-            ->where('warehouse_id', $warehouseId)
-            ->update([
-                'qty' => $newQty,
-                'updated_at' => now(),
-            ]);
-
-        // If update affected 0 rows, insert a new stock row (only if qty > 0 or if you want to keep zeros too)
-        if (!$updated) {
-            DB::table('stocks')->insert([
-                'branch_id'    => $branchId,
-                'warehouse_id' => $warehouseId,
-                'product_id'   => $product_id,
-                'qty'          => $newQty,
-                'created_at'   => now(),
-                'updated_at'   => now(),
-            ]);
+        // Image upload
+        $imagePath = $product->image;
+        if ($request->hasFile('image')) {
+            $file = $request->file('image');
+            $filename = time() . '.' . $file->getClientOriginalExtension();
+            $file->move(public_path('uploads/products'), $filename);
+            $imagePath = $filename;
         }
 
-        return redirect()->back()->with('success', 'Product updated successfully');
+        // Normalize fields
+        $categoryId = $request->input('category_id') ? (int)$request->input('category_id') : null;
+        $subCategoryId = $request->input('sub_category_id') ? (int)$request->input('sub_category_id') : null;
+
+        $brandInput = $request->input('brand_id');
+        if (is_array($brandInput)) {
+            $brandInput = reset($brandInput);
+        }
+        $brandId = $brandInput !== null ? (int)$brandInput : null;
+
+        try {
+            DB::beginTransaction();
+
+            $product->update([
+                'creater_id'      => $userId,
+                'category_id'     => $categoryId,
+                'sub_category_id' => $subCategoryId,
+                'item_name'       => $request->input('product_name'),
+                'barcode_path'    => $request->input('barcode_path') ?? $product->barcode_path,
+                'unit_id'         => $request->input('unit'),
+                'unit_type'       => $request->input('unit_type'),
+                'brand_id'        => $brandId,
+                'alert_quantity'  => $request->input('alert_quantity') ? (int)$request->input('alert_quantity') : 0,
+                'note'            => $request->input('note'),
+                'image'           => $imagePath,
+                'updated_at'      => now(),
+            ]);
+
+            // Remove old variants and their stocks to avoid duplicates/orphans
+            ProductVariant::where('product_id', $product->id)->delete();
+            DB::table('stocks')->where('product_id', $product->id)->delete();
+
+            // --- Save Product Variants ---
+            $variantNames = $request->input('variant_name', []);
+            $variantSizeValues = $request->input('variant_size_value', []);
+            $variantSizeUnits = $request->input('variant_size_unit', []);
+            $variantPrices = $request->input('variant_price', []);
+            $variantCostPrices = $request->input('variant_cost_price', []);
+            $variantStocks = $request->input('variant_stock', []);
+            $variantDefault = $request->input('variant_default', 0); // index of default variant
+
+            $totalStock = 0;
+            $defaultPrice = 0;
+
+            if (!empty($variantNames)) {
+                foreach ($variantNames as $index => $vName) {
+                    if (empty($vName)) continue;
+
+                    $sizeValue = floatval($variantSizeValues[$index] ?? 0);
+                    $sizeUnit = $variantSizeUnits[$index] ?? $request->input('unit_type');
+
+                    $dbSizeValue = $sizeValue;
+                    $sizeLabel = $vName;
+                    
+                    if ($sizeUnit === 'kg') {
+                        $dbSizeValue = $sizeValue / 1000;
+                        $sizeLabel = $vName . ' (' . number_format($dbSizeValue, 3) . ' KG)';
+                    }
+
+                    $vPrice = floatval($variantPrices[$index] ?? 0);
+                    $vCost = floatval($variantCostPrices[$index] ?? 0);
+                    $vStock = floatval($variantStocks[$index] ?? 0);
+                    $isDefault = ((int)$variantDefault === $index);
+
+                    $variant = ProductVariant::create([
+                        'product_id'      => $product->id,
+                        'variant_name'    => $vName,
+                        'size_label'      => $sizeLabel,
+                        'size_value'      => $dbSizeValue,
+                        'size_unit'       => $sizeUnit,
+                        'price'           => $vPrice,
+                        'wholesale_price' => 0,
+                        'cost_price'      => $vCost,
+                        'stock_qty'       => $vStock,
+                        'alert_quantity'  => 0,
+                        'is_default'      => $isDefault,
+                        'is_active'       => true,
+                    ]);
+
+                    // Single variant stock entry
+                    DB::table('stocks')->insert([
+                        'branch_id'    => 1,
+                        'warehouse_id' => 1,
+                        'product_id'   => $product->id,
+                        'variant_id'   => $variant->id,
+                        'qty'          => $vStock,
+                        'created_at'   => now(),
+                        'updated_at'   => now(),
+                    ]);
+
+                    $totalStock += $vStock;
+                    if ($isDefault) {
+                        $defaultPrice = $vPrice;
+                    }
+                }
+
+                // Update product with default variant price
+                $product->update([
+                    'price'           => $defaultPrice,
+                    'initial_stock'   => $totalStock,
+                ]);
+            }
+
+            DB::commit();
+            return redirect('Product')->with('success', 'Product updated successfully!');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withInput()->with('error', 'Error updating product: ' . $e->getMessage());
+        }
     }
 
     public function edit($id)
     {
+        $product = Product::with(['category_relation', 'sub_category_relation', 'unit', 'brand', 'variants'])->findOrFail($id);
+        $categories = Category::select('id', 'name')->get();
+        $units = Unit::select('id', 'name')->get();
+        $brands = Brand::select('id', 'name')->get();
+        // Subcategories for the current category
+        $subcategories = SubCategory::where('category_id', $product->category_id)->get();
 
-        $product = Product::with('category_relation', 'sub_category_relation', 'unit', 'brand')->findOrFail($id);
-
-        // dd($product->toArray());
-        $categories = Category::all();
-
-
-        $subcategories = SubCategory::all();
-        $brands = Brand::all();
-        return view('admin_panel.product.edit', compact('product', 'categories', 'subcategories', 'brands'));
+        return view('admin_panel.product.edit', compact('product', 'categories', 'subcategories', 'brands', 'units'));
     }
 
     // Add function in ProductController.php
