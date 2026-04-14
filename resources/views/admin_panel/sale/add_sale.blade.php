@@ -540,8 +540,10 @@ function makeCard(p) {
     const div = document.createElement('div');
     div.className = 'pc';
 
-    const stk    = p.stock <= 0 ? 'out' : (p.stock <= 5 ? 'low' : '');
-    const stkTxt = p.stock <= 0 ? 'Out' : ('Stk:' + p.stock);
+    const isKg   = p.unit_type === 'kg';
+    const lowTh  = isKg ? 5000 : 5;
+    const stk    = p.stock <= 0 ? 'out' : (p.stock <= lowTh ? 'low' : '');
+    const stkTxt = p.stock <= 0 ? 'Out' : ('Stk:' + fmtStk(p.stock, p.unit_type));
 
     // Build image HTML using concat (no nested backticks)
     let imgHtml = '';
@@ -627,7 +629,7 @@ function renderSizes(variants) {
     variants.forEach(function(v, i) {
         const c = document.createElement('div');
         c.className = 'szc' + (v.is_default ? ' sel' : '');
-        const stkTxt = v.stock > 0 ? ('Stk:' + v.stock) : 'Low/Out';
+        const stkTxt = v.stock > 0 ? ('Stk:' + fmtStk(v.stock, curProd.unit_type)) : 'Low/Out';
         c.innerHTML =
             '<div class="slabel">' + (v.size_label || v.name || '') + '</div>'
             + '<div class="sprice">Rs ' + fmt(v.price) + '</div>'
@@ -949,6 +951,11 @@ function confirmBook(){
 
 /* ---- UTILS ---- */
 function fmt(n){ return (parseFloat(n)||0).toLocaleString('en-PK',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function fmtStk(n, u){
+    n = parseFloat(n) || 0;
+    if (u === 'kg') return (n / 1000).toFixed(2) + ' KG';
+    return n.toLocaleString();
+}
 function toast(msg){ Swal.fire({toast:true,position:'top-end',icon:'warning',title:msg,showConfirmButton:false,timer:1800}); }
 function n2w(n){
     if(!n||n<=0)return'';
