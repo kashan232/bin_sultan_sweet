@@ -624,6 +624,7 @@ class ReportingController extends Controller
                     'sales.invoice_no', // ✅ Select invoice_no specifically
                     'sales.reference',
                     'sales.product',
+                    'sales.variant_id',
                     'sales.product_code',
                     'sales.brand',
                     'sales.unit',
@@ -670,26 +671,53 @@ class ReportingController extends Controller
 
             $sales = $query->orderBy('sales.created_at', 'asc')->get();
 
+            // 1. Collect all product and variant IDs for bulk fetching
+            $allProdIds = [];
+            $allVarIds  = [];
             foreach ($sales as $sale) {
-                // --- Fetch Product Names using IDs ---
                 if (!empty($sale->product)) {
-                    $productIds = explode(',', $sale->product);
-                    
-                    // 1. Fetch all products in one go
-                    $productsDict = DB::table('products')
-                        ->whereIn('id', $productIds)
-                        ->pluck('item_name', 'id'); // [id => name]
+                    $ids = explode(',', $sale->product);
+                    foreach($ids as $id) if(trim($id)) $allProdIds[] = trim($id);
+                }
+                if (!empty($sale->variant_id)) {
+                    $vids = explode(',', $sale->variant_id);
+                    foreach($vids as $vid) if(trim($vid)) $allVarIds[] = trim($vid);
+                }
+            }
+            
+            $productsDict = \App\Models\Product::whereIn('id', array_unique($allProdIds))->get()->keyBy('id');
+            $variantsDict = \App\Models\ProductVariant::whereIn('id', array_unique($allVarIds))->get()->keyBy('id');
 
-                    // 2. Map names back in the EXACT order of $productIds
-                    // If a product ID is repeated in the comma-list, its name should also repeat
+            foreach ($sales as $sale) {
+                // --- Process Products, Variants and Units ---
+                if (!empty($sale->product)) {
+                    $pIds = explode(',', $sale->product);
+                    $vIds = !empty($sale->variant_id) ? explode(',', $sale->variant_id) : [];
+                    
                     $orderedNames = [];
-                    foreach ($productIds as $pid) {
-                        $orderedNames[] = $productsDict[$pid] ?? '-';
+                    $orderedUnits = [];
+                    
+                    foreach ($pIds as $idx => $pid) {
+                        $pid = trim($pid);
+                        $p = $productsDict->get($pid);
+                        $name = $p ? $p->item_name : '-';
+                        $unit = $p ? strtoupper($p->unit_type ?? 'Piece') : '-';
+                        
+                        $vid = isset($vIds[$idx]) ? trim($vIds[$idx]) : null;
+                        if ($vid && $variantsDict->has($vid)) {
+                            $v = $variantsDict->get($vid);
+                            $name .= ' (' . ($v->size_label ?: $v->variant_name) . ')';
+                        }
+                        
+                        $orderedNames[] = $name;
+                        $orderedUnits[] = $unit;
                     }
 
-                    $sale->product_names = implode(', ', $orderedNames);
+                    $sale->product_names = implode('|', $orderedNames);
+                    $sale->unit          = implode('|', $orderedUnits); 
                 } else {
                     $sale->product_names = '-';
+                    $sale->unit          = '-';
                 }
 
                 // --- Merge Sale Returns ---
@@ -750,6 +778,7 @@ class ReportingController extends Controller
                     'sales.invoice_no',
                     'sales.reference',
                     'sales.product',
+                    'sales.variant_id',
                     'sales.product_code',
                     'sales.brand',
                     'sales.unit',
@@ -791,79 +820,83 @@ class ReportingController extends Controller
 
             $finalSales = [];
 
-            // ================== LOOP SALES ==================
+            // 1. Collect all variant IDs for bulk fetching (products are already fetched per-sale or could be bulked too)
+            $allVarIds = [];
             foreach ($sales as $sale) {
-
-                if (empty($sale->product)) {
-                    continue;
+                if (!empty($sale->variant_id)) {
+                    foreach(explode(',', $sale->variant_id) as $vid) if(trim($vid)) $allVarIds[] = trim($vid);
                 }
+            }
+            $variantsDict = \App\Models\ProductVariant::whereIn('id', array_unique($allVarIds))->get()->keyBy('id');
 
-                // Convert CSV → Arrays
-                $productIds = explode(',', $sale->product);
-                $qtyArr     = explode(',', $sale->qty);
-                $priceArr   = explode(',', $sale->per_price);
-                $totalArr   = explode(',', $sale->per_total);
-                $unitArr    = explode(',', $sale->unit); // Get Units
+            foreach ($sales as $sale) {
+                if (empty($sale->product)) continue;
+
+                $pIds     = explode(',', $sale->product);
+                $vIds     = !empty($sale->variant_id) ? explode(',', $sale->variant_id) : [];
+                $qtyArr   = explode(',', $sale->qty);
+                $priceArr = explode(',', $sale->per_price);
+                $totalArr = explode(',', $sale->per_total);
 
                 // ================== PRODUCTS QUERY ==================
-                $products = DB::table('products')
+                // Filter products by category/subcategory if requested
+                $productsQuery = DB::table('products')
                     ->leftJoin('categories', 'products.category_id', '=', 'categories.id')
-                    ->leftJoin('subcategories', 'products.sub_category_id', '=', 'subcategories.id') // Join Subcategories
-                    ->whereIn('products.id', $productIds)
-                    ->when($categoryId, function ($q) use ($categoryId) {
-                        $q->where('products.category_id', $categoryId);
-                    })
-                    ->when($subCategoryId, function ($q) use ($subCategoryId) {
-                        $q->where('products.sub_category_id', $subCategoryId);
-                    })
-                    ->select(
-                        'products.id',
-                        'products.item_name',
-                        'categories.name as category_name',
-                        'subcategories.name as subcategory_name'
-                    )
-                    ->get();
+                    ->leftJoin('subcategories', 'products.sub_category_id', '=', 'subcategories.id')
+                    ->whereIn('products.id', $pIds)
+                    ->select('products.id','products.item_name','products.unit_type','categories.name as category_name','subcategories.name as subcategory_name');
+                
+                if ($categoryId)    $productsQuery->where('products.category_id', $categoryId);
+                if ($subCategoryId) $productsQuery->where('products.sub_category_id', $subCategoryId);
+                
+                $matchedProducts = $productsQuery->get()->keyBy('id');
 
-                // Skip if no product matched category/subcategory
-                if ($products->isEmpty()) {
-                    continue;
-                }
+                if ($matchedProducts->isEmpty()) continue;
 
-                // ================== MATCH VALUES ==================
-                $matchedQty   = [];
-                $matchedPrice = [];
-                $matchedTotal = [];
-                $matchedUnit  = [];
+                $finalNames   = [];
+                $finalCats    = [];
+                $finalSubCats = [];
+                $finalQtys    = [];
+                $finalPrices  = [];
+                $finalTotals  = [];
+                $finalUnits   = [];
 
-                foreach ($products as $product) {
-                    $index = array_search($product->id, $productIds);
+                // Iterate through the comma-separated arrays to maintain order and handle multiple instances/variants
+                foreach ($pIds as $index => $pid) {
+                    $pid = trim($pid);
+                    if (!$matchedProducts->has($pid)) continue;
 
-                    if ($index !== false) {
-                        $matchedQty[]   = (float) ($qtyArr[$index] ?? 0);
-                        $matchedPrice[] = (float) ($priceArr[$index] ?? 0);
-                        $matchedTotal[] = (float) ($totalArr[$index] ?? 0);
-                        $matchedUnit[]  = trim($unitArr[$index] ?? '-');
+                    $product = $matchedProducts->get($pid);
+                    $name    = $product->item_name;
+                    $unit    = strtoupper($product->unit_type ?? 'Piece');
+                    
+                    $vid = isset($vIds[$index]) ? trim($vIds[$index]) : null;
+                    if ($vid && $variantsDict->has($vid)) {
+                        $v = $variantsDict->get($vid);
+                        $name .= ' (' . ($v->size_label ?: $v->variant_name) . ')';
                     }
+
+                    $finalNames[]   = $name;
+                    $finalCats[]    = $product->category_name ?? '-';
+                    $finalSubCats[] = $product->subcategory_name ?? '-';
+                    $finalQtys[]    = (float)($qtyArr[$index] ?? 0);
+                    $finalPrices[]  = (float)($priceArr[$index] ?? 0);
+                    $finalTotals[]  = (float)($totalArr[$index] ?? 0);
+                    $finalUnits[]   = $unit;
                 }
 
-                // ================== ASSIGN FILTERED DATA ==================
-                $sale->product_names  = $products->pluck('item_name')->implode(', ');
-                $sale->categories     = $products->pluck('category_name')->implode(', ');
-                $sale->subcategories  = $products->pluck('subcategory_name')->implode(', '); // Add Subcategories
+                if (empty($finalNames)) continue;
 
-                $sale->filtered_qty   = implode(', ', $matchedQty);
-                $sale->filtered_price = implode(', ', $matchedPrice);
-                $sale->filtered_total = implode(', ', $matchedTotal);
-                $sale->filtered_unit  = implode(', ', $matchedUnit); // Add filtered unit string
+                $sale->product_names  = implode('|', $finalNames);
+                $sale->categories     = implode(', ', array_unique($finalCats));
+                $sale->subcategories  = implode(', ', array_unique($finalSubCats));
+                $sale->filtered_qty   = implode('|', $finalQtys);
+                $sale->filtered_price = implode('|', $finalPrices);
+                $sale->filtered_total = implode('|', $finalTotals);
+                $sale->filtered_unit  = implode('|', $finalUnits); 
+                $sale->filtered_net   = array_sum($finalTotals);
 
-                // IMPORTANT: make sure number is numeric
-                $sale->filtered_net   = array_sum($matchedTotal);
-
-                // ================== SALE RETURNS ==================
-                $sale->returns = DB::table('sales_returns')
-                    ->where('sale_id', $sale->id)
-                    ->get();
-
+                $sale->returns = DB::table('sales_returns')->where('sale_id', $sale->id)->get();
                 $finalSales[] = $sale;
             }
 

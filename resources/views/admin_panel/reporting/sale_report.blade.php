@@ -179,6 +179,8 @@
                 
                 // Unit Totals
                 let grandPiece = 0;
+                let grandKG = 0;
+                let grandPound = 0;
                 let grandMeter = 0;
                 let grandYard = 0;
 
@@ -186,8 +188,7 @@
                     // Products: if product_names field present (comma separated) else '-' 
                     let products = '-';
                     if (s.product_names) {
-                        // keep line breaks for CSV/HTML view
-                        products = s.product_names.split(',').map(p => p.trim()).join('<br>');
+                        products = s.product_names.split('|').map(p => p.trim()).join('<br>');
                     }
 
                     // Parse qty array safely (qty may be comma-separated string)
@@ -199,7 +200,7 @@
 
                     // Units Logic
                     const unitArrRaw = (s.unit || '').toString().trim();
-                    const unitArr = unitArrRaw.length ? unitArrRaw.split(',').map(x => x.trim()) : [];
+                    const unitArr = unitArrRaw.length ? unitArrRaw.split('|').map(x => x.trim()) : [];
                     
                     // Sum up units based on corresponding Qty
                     if (unitArr.length === qtyArr.length) {
@@ -207,6 +208,8 @@
                             const q = qtyArrNums[idx];
                             const uLower = u.toLowerCase();
                             if (uLower.includes('piece') || uLower.includes('pcs')) grandPiece += q;
+                            else if (uLower.includes('kg')) grandKG += q;
+                            else if (uLower.includes('pound')) grandPound += q;
                             else if (uLower.includes('meter')) grandMeter += q;
                             else if (uLower.includes('yard')) grandYard += q;
                         });
@@ -310,7 +313,7 @@
                         <td>${s.reference ?? '-'}</td>
                         <td>${products}</td>
                         <td>${unitArr.length ? unitArr.join('<br>') : '-'}</td>
-                        <td>${qtyArr.length ? qtyArr.map(x => (num(x) ? num(x).toFixed(2) : '0.00')).join('<br>') : '-'}</td>
+                        <td>${qtyArr.length ? qtyArr.map((x, idx) => (num(x) ? num(x).toFixed(2) + ' <small class="text-muted">' + (unitArr[idx]||'') + '</small>' : '0.00')).join('<br>') : '-'}</td>
                         <td>${priceDisplay}</td>
                         <td>${totalDisplay}</td>
                         <td>${rowNet.toFixed(2)}</td>
@@ -323,8 +326,10 @@
                     <td colspan="6" class="text-end">Grand Total:</td>
                     <td>
                         Pieces: ${grandPiece.toFixed(2)}<br>
-                        Meters: ${grandMeter.toFixed(2)}<br>
-                        Yards: ${grandYard.toFixed(2)}
+                        KG: ${grandKG.toFixed(2)}<br>
+                        ${grandPound > 0 ? 'Pound: ' + grandPound.toFixed(2) + '<br>' : ''}
+                        ${grandMeter > 0 ? 'Meters: ' + grandMeter.toFixed(2) + '<br>' : ''}
+                        ${grandYard > 0 ? 'Yards: ' + grandYard.toFixed(2) + '<br>' : ''}
                     </td>
                     <td>${grandQty.toFixed(2)}</td>
                     <td>-</td>

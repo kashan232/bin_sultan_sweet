@@ -413,7 +413,7 @@
         @foreach($saleItems as $item)
         <tr>
           <td class="col-item">{{ $item['item_name'] }}</td>
-          <td class="col-qty">{{ $item['qty'] }}</td>
+          <td class="col-qty">{{ $item['qty'] }} <small>{{ $item['unit'] }}</small></td>
 
           <td class="col-price">
             {{ rtrim(rtrim(number_format($item['price'], 2), '0'), '.') }}

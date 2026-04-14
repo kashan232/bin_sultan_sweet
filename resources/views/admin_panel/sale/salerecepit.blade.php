@@ -94,7 +94,7 @@
             @foreach($saleItems as $item)
             <tr>
                 <td>{{ $item['item_name'] }}</td>
-                <td>{{ $item['qty'] }}</td>
+                <td>{{ $item['qty'] }} {{ $item['unit'] }}</td>
                 <td>{{ number_format($item['price'], 0) }}</td>
                 <td>{{ number_format($item['total'], 0) }}</td>
             </tr>

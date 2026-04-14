@@ -1730,12 +1730,17 @@ class SaleController extends Controller
                 $displayName .= ' - ' . $variantName;
             }
 
+            $unit = $units[$index] ?? '';
+            if ($productModel && (empty($unit) || is_numeric($unit))) {
+                $unit = strtoupper($productModel->unit_type ?? 'Piece');
+            }
+
             $items[] = [
                 'item_name' => $displayName,
                 'category'  => $catName,
                 'item_code' => $codes[$index] ?? '',
                 'brand'     => $brands[$index] ?? '',
-                'unit'      => $units[$index] ?? '',
+                'unit'      => $unit,
                 'price'     => (float) ($prices[$index] ?? 0),
                 'discount'  => (float) ($discounts[$index] ?? 0),
                 'qty'       => $qty,
@@ -2165,7 +2170,7 @@ class SaleController extends Controller
                 'item_name'  => $product->item_name ?? $p,
                 'item_code'  => $product->item_code ?? ($codes[$index] ?? ''),
                 'brand'      => $product->brand->name ?? ($brands[$index] ?? ''),
-                'unit'       => $product->unit ?? ($units[$index] ?? ''),
+                'unit'       => $product && (empty($units[$index] ?? '') || is_numeric($units[$index] ?? '')) ? strtoupper($product->unit_type ?? 'Piece') : ($units[$index] ?? ''),
                 'price'      => floatval($prices[$index] ?? 0),
                 'discount'   => floatval($discounts[$index] ?? 0),
                 'qty'        => intval($qtys[$index] ?? 1),

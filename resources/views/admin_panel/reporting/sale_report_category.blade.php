@@ -216,23 +216,25 @@
                 
                 // Unit Totals
                 let grandPiece = 0;
+                let grandKG = 0;
+                let grandPound = 0;
                 let grandMeter = 0;
                 let grandYard = 0;
 
                 (res || []).forEach((s, i) => {
-                    let products = s.product_names ? s.product_names.split(',').map(p => p.trim()).join('<br>') : '-';
+                    let products = s.product_names ? s.product_names.split('|').map(p => p.trim()).join('<br>') : '-';
                     let categories = s.categories ? s.categories.split(',').map(c => c.trim()).join('<br>') : '-';
                     let subcategories = s.subcategories ? s.subcategories.split(',').map(c => c.trim()).join('<br>') : '-';
 
                     const qtyArrRaw = (s.filtered_qty || '').toString().trim();
-                    const qtyArr = qtyArrRaw.length ? qtyArrRaw.split(',').map(x => x.trim()) : [];
+                    const qtyArr = qtyArrRaw.length ? qtyArrRaw.split('|').map(x => x.trim()) : [];
                     const qtyArrNums = qtyArr.map(num);
                     const rowQty = sumArray(qtyArrNums);
                     grandQty += rowQty;
 
                     // Unit Logic
                     const unitArrRaw = (s.filtered_unit || '').toString().trim();
-                    const unitArr = unitArrRaw.length ? unitArrRaw.split(',').map(x => x.trim()) : [];
+                    const unitArr = unitArrRaw.length ? unitArrRaw.split('|').map(x => x.trim()) : [];
                     
                     // Sum up units based on qty
                     if (unitArr.length === qtyArr.length) {
@@ -240,16 +242,18 @@
                             const q = qtyArrNums[idx];
                             const uLower = u.toLowerCase();
                             if (uLower.includes('piece') || uLower.includes('pcs')) grandPiece += q;
+                            else if (uLower.includes('kg')) grandKG += q;
+                            else if (uLower.includes('pound')) grandPound += q;
                             else if (uLower.includes('meter')) grandMeter += q;
                             else if (uLower.includes('yard')) grandYard += q;
                         });
                     }
 
                     const priceDisplay = (s.filtered_price || '') ?
-                        s.filtered_price.toString().split(',').map(p => p.trim()).join('<br>') : '-';
+                        s.filtered_price.toString().split('|').map(p => p.trim()).join('<br>') : '-';
                     
                     const perTotalRaw = (s.filtered_total || '').toString().trim();
-                    const perTotalArr = perTotalRaw.length ? perTotalRaw.split(',').map(x => x.trim()) : [];
+                    const perTotalArr = perTotalRaw.length ? perTotalRaw.split('|').map(x => x.trim()) : [];
                     const perTotalNums = perTotalArr.map(num);
                     const rowTotal = sumArray(perTotalNums);
                     grandTotal += rowTotal;
@@ -290,7 +294,7 @@
                     <td>${categories}</td>
                     <td>${subcategories}</td>
                     <td>${unitArr.length ? unitArr.join('<br>') : '-'}</td>
-                    <td>${qtyArr.length ? qtyArr.map(x=>num(x).toFixed(2)).join('<br>') : '-'}</td>
+                    <td>${qtyArr.length ? qtyArr.map((x, idx) => (num(x) ? num(x).toFixed(2) + ' <small class="text-muted">' + (unitArr[idx]||'') + '</small>' : '0.00')).join('<br>') : '-'}</td>
                     <td>${priceDisplay}</td>
                     <td>${perTotalArr.length ? perTotalArr.map(x=>num(x).toFixed(2)).join('<br>') : '-'}</td>
                     <td>${rowNet.toFixed(2)}</td>
@@ -303,8 +307,10 @@
                 <td colspan="8" class="text-end">Grand Total:</td>
                 <td>
                     Pieces: ${grandPiece.toFixed(2)}<br>
-                    Meters: ${grandMeter.toFixed(2)}<br>
-                    Yards: ${grandYard.toFixed(2)}
+                    KG: ${grandKG.toFixed(2)}<br>
+                    ${grandPound > 0 ? 'Pound: ' + grandPound.toFixed(2) + '<br>' : ''}
+                    ${grandMeter > 0 ? 'Meters: ' + grandMeter.toFixed(2) + '<br>' : ''}
+                    ${grandYard > 0 ? 'Yards: ' + grandYard.toFixed(2) + '<br>' : ''}
                 </td>
                 <td>${grandQty.toFixed(2)}</td> <!-- Total Qty Mixed -->
                 <td>-</td>
