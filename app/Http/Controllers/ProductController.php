@@ -325,11 +325,13 @@ class ProductController extends Controller
 
     public function update(Request $request, $id)
     {
-        if (!Auth::id()) {
-            return redirect()->back();
+        if (!Auth::check()) {
+            return redirect()->route('login')->with('error', 'Your session has expired. Please log in again.');
         }
         $userId = Auth::id();
         $product = Product::findOrFail($id);
+
+        \Log::info("Updating product ID: " . $id, $request->all());
 
         // basic validation
         $request->validate([
@@ -357,7 +359,7 @@ class ProductController extends Controller
         if (is_array($brandInput)) {
             $brandInput = reset($brandInput);
         }
-        $brandId = $brandInput !== null ? (int)$brandInput : null;
+        $brandId = !empty($brandInput) ? (int)$brandInput : null;
 
         try {
             DB::beginTransaction();
@@ -374,7 +376,6 @@ class ProductController extends Controller
                 'alert_quantity'  => $request->input('alert_quantity') ? (int)$request->input('alert_quantity') : 0,
                 'note'            => $request->input('note'),
                 'image'           => $imagePath,
-                'updated_at'      => now(),
             ]);
 
             // Remove old variants and their stocks to avoid duplicates/orphans
@@ -453,9 +454,10 @@ class ProductController extends Controller
             }
 
             DB::commit();
-            return redirect('Product')->with('success', 'Product updated successfully!');
+            return redirect()->route('product')->with('success', 'Product updated successfully!');
         } catch (\Exception $e) {
             DB::rollBack();
+            \Log::error("Error updating product: " . $e->getMessage());
             return back()->withInput()->with('error', 'Error updating product: ' . $e->getMessage());
         }
     }

@@ -329,7 +329,7 @@
                                                         </select>
                                                     </div>
 
-                                                    <div class="col-sm-4">
+                                                    <div class="col-sm-3">
                                                         <label class="form-label fw-bold">Brand</label>
                                                         <select name="brand_id[]" class="form-select brand-select">
                                                             <option value="">Select Brand</option>
@@ -339,7 +339,7 @@
                                                         </select>
                                                     </div>
 
-                                                    <div class="col-sm-4">
+                                                    <div class="col-sm-3">
                                                         <label for="barcodeInput" class="form-label fw-bold">Barcode</label>
                                                         <div class="input-group">
                                                             <input type="text" id="barcodeInput" name="barcode_path" class="form-control"
@@ -350,8 +350,18 @@
                                                         </div>
                                                     </div>
 
-                                                    <div class="col-sm-4">
-                                                        <label class="form-label fw-bold">Alert Quantity</label>
+                                                    <div class="col-sm-3">
+                                                        <label class="form-label fw-bold">Unit</label>
+                                                        <select name="unit" class="form-select">
+                                                            <option value="">Select Unit</option>
+                                                            @foreach ($units as $unit)
+                                                            <option value="{{ $unit->id }}" {{ $product->unit_id == $unit->id ? 'selected' : '' }}>{{ $unit->name }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    </div>
+
+                                                    <div class="col-sm-3">
+                                                        <label class="form-label fw-bold">Alert Qty</label>
                                                         <input type="number" name="alert_quantity" class="form-control" value="{{ $product->alert_quantity }}">
                                                     </div>
 
