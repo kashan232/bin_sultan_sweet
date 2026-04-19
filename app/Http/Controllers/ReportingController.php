@@ -693,32 +693,60 @@ class ReportingController extends Controller
                 if (!empty($sale->product)) {
                     $pIds = explode(',', $sale->product);
                     $vIds = !empty($sale->variant_id) ? explode(',', $sale->variant_id) : [];
+                    $qArr = explode(',', $sale->qty);
+                    $prArr = explode(',', $sale->per_price);
                     
                     $orderedNames = [];
                     $orderedUnits = [];
+                    $modifiedQtys = [];
+                    $modifiedPrices = [];
                     
                     foreach ($pIds as $idx => $pid) {
                         $pid = trim($pid);
                         $p = $productsDict->get($pid);
                         $name = $p ? $p->item_name : '-';
                         $unit = $p ? strtoupper($p->unit_type ?? 'Piece') : '-';
+                        $qty = isset($qArr[$idx]) ? floatval($qArr[$idx]) : 0;
+                        $price = isset($prArr[$idx]) ? floatval($prArr[$idx]) : 0;
                         
                         $vid = isset($vIds[$idx]) ? trim($vIds[$idx]) : null;
                         if ($vid && $variantsDict->has($vid)) {
                             $v = $variantsDict->get($vid);
                             $name .= ' (' . ($v->size_label ?: $v->variant_name) . ')';
                             
-                            // If selling by variant (e.g. 250g box), the quantity 
-                            // represents units/pieces of that variant, not raw KG.
-                            $unit = 'PIECE';
+                            // Check if we should convert to weight-based display
+                            if ($p && strtolower($p->unit_type) === 'kg' && $v->size_value > 0) {
+                                $multiplier = 1;
+                                $sUnit = strtolower($v->size_unit ?? 'kg');
+                                if ($sUnit === 'kg') {
+                                    $multiplier = floatval($v->size_value);
+                                } elseif ($sUnit === 'gm' || $sUnit === 'grams' || $sUnit === 'gram') {
+                                    $multiplier = floatval($v->size_value) / 1000;
+                                }
+                                
+                                // Convert display values: 2 boxes of 0.250kg -> 0.500kg
+                                $qty = $qty * $multiplier;
+                                // Adjust price to price-per-kg to keep total consistent
+                                if ($multiplier > 0) {
+                                    $price = $price / $multiplier;
+                                }
+                                $unit = 'KG';
+                            } else {
+                                // If not weight-based, use PIECE for variant count
+                                $unit = 'PIECE';
+                            }
                         }
                         
-                        $orderedNames[] = $name;
-                        $orderedUnits[] = $unit;
+                        $orderedNames[]  = $name;
+                        $orderedUnits[]  = $unit;
+                        $modifiedQtys[]  = $qty;
+                        $modifiedPrices[] = $price;
                     }
 
                     $sale->product_names = implode('|', $orderedNames);
-                    $sale->unit          = implode('|', $orderedUnits); 
+                    $sale->unit          = implode('|', $orderedUnits);
+                    $sale->qty           = implode(',', $modifiedQtys);
+                    $sale->per_price     = implode(',', $modifiedPrices);
                 } else {
                     $sale->product_names = '-';
                     $sale->unit          = '-';
@@ -873,20 +901,39 @@ class ReportingController extends Controller
                     $product = $matchedProducts->get($pid);
                     $name    = $product->item_name;
                     $unit    = strtoupper($product->unit_type ?? 'Piece');
+                    $qty     = (float)($qtyArr[$index] ?? 0);
+                    $price   = (float)($priceArr[$index] ?? 0);
                     
                     $vid = isset($vIds[$index]) ? trim($vIds[$index]) : null;
                     if ($vid && $variantsDict->has($vid)) {
                         $v = $variantsDict->get($vid);
                         $name .= ' (' . ($v->size_label ?: $v->variant_name) . ')';
-                        // If it's a variant, use Piece as unit
-                        $unit = 'PIECE';
+                        
+                        // Check weight-based conversion
+                        if ($product && strtolower($product->unit_type) === 'kg' && $v->size_value > 0) {
+                            $multiplier = 1;
+                            $sUnit = strtolower($v->size_unit ?? 'kg');
+                            if ($sUnit === 'kg') {
+                                $multiplier = floatval($v->size_value);
+                            } elseif ($sUnit === 'gm' || $sUnit === 'grams' || $sUnit === 'gram') {
+                                $multiplier = floatval($v->size_value) / 1000;
+                            }
+                            
+                            $qty = $qty * $multiplier;
+                            if ($multiplier > 0) {
+                                $price = $price / $multiplier;
+                            }
+                            $unit = 'KG';
+                        } else {
+                            $unit = 'PIECE';
+                        }
                     }
 
                     $finalNames[]   = $name;
                     $finalCats[]    = $product->category_name ?? '-';
                     $finalSubCats[] = $product->subcategory_name ?? '-';
-                    $finalQtys[]    = (float)($qtyArr[$index] ?? 0);
-                    $finalPrices[]  = (float)($priceArr[$index] ?? 0);
+                    $finalQtys[]    = $qty;
+                    $finalPrices[]  = $price;
                     $finalTotals[]  = (float)($totalArr[$index] ?? 0);
                     $finalUnits[]   = $unit;
                 }

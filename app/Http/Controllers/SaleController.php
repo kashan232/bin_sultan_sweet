@@ -1709,7 +1709,7 @@ class SaleController extends Controller
             ->get()->keyBy('id'); // [id => ProductModel]
             
         $variantMap = \App\Models\ProductVariant::whereIn('id', array_filter($variant_ids))
-            ->pluck('variant_name', 'id'); 
+            ->get()->keyBy('id'); 
 
         foreach ($products as $index => $p) {
 
@@ -1721,7 +1721,8 @@ class SaleController extends Controller
             }
             
             $vId = $variant_ids[$index] ?? '';
-            $variantName = $vId ? ($variantMap[$vId] ?? '') : '';
+            $vModel = $vId ? ($variantMap[$vId] ?? null) : null;
+            $variantName = $vModel ? ($vModel->size_label ?: $vModel->variant_name) : '';
             $productModel = $productMap[$p] ?? null;
             $displayName = $productModel ? $productModel->item_name : $p;
             $catName = ($productModel && $productModel->category_relation) ? $productModel->category_relation->name : 'Uncategorized';
@@ -1731,9 +1732,20 @@ class SaleController extends Controller
             }
 
             $unit = $units[$index] ?? '';
-            if ($productModel && (empty($unit) || is_numeric($unit))) {
-                // If selling by variant, the unit represents pieces of that variant bag/box
-                if (!empty($variant_ids[$index])) {
+            $price = (float)($prices[$index] ?? 0);
+
+            // WEIGHT CONVERSION LOGIC
+            if ($vModel && $productModel && strtolower($productModel->unit_type ?? '') === 'kg' && $vModel->size_value > 0) {
+                $multiplier = 1;
+                $sUnit = strtolower($vModel->size_unit ?? 'kg');
+                if ($sUnit === 'kg') $multiplier = (float)$vModel->size_value;
+                elseif (in_array($sUnit, ['gm','gram','grams'])) $multiplier = (float)$vModel->size_value / 1000;
+                
+                $qty = $qty * $multiplier;
+                if ($multiplier > 0) $price = $price / $multiplier;
+                $unit = 'KG';
+            } else if ($productModel && (empty($unit) || is_numeric($unit))) {
+                if (!empty($vId)) {
                     $unit = 'PIECE';
                 } else {
                     $unit = strtoupper($productModel->unit_type ?? 'Piece');
@@ -1746,7 +1758,7 @@ class SaleController extends Controller
                 'item_code' => $codes[$index] ?? '',
                 'brand'     => $brands[$index] ?? '',
                 'unit'      => $unit,
-                'price'     => (float) ($prices[$index] ?? 0),
+                'price'     => $price,
                 'discount'  => (float) ($discounts[$index] ?? 0),
                 'qty'       => $qty,
                 'total'     => (float) ($totals[$index] ?? 0),
@@ -2164,6 +2176,8 @@ class SaleController extends Controller
         $vids     = explode(',', $sale->variant_id ?? '');
         $colors_json = json_decode($sale->color, true);
 
+        $vObjects = \App\Models\ProductVariant::whereIn('id', array_filter($vids))->get()->keyBy('id');
+
         $items = [];
 
         foreach ($products as $index => $p) {
@@ -2171,23 +2185,36 @@ class SaleController extends Controller
                 ->orWhere('item_code', trim($codes[$index] ?? ''))
                 ->first();
 
+            $vId = trim($vids[$index] ?? '');
+            $vModel = $vId ? ($vObjects[$vId] ?? null) : null;
+            $price = floatval($prices[$index] ?? 0);
+            $qty = floatval($qtys[$index] ?? 1);
+            $unit = $units[$index] ?? '';
+
+            if ($vModel && $product && strtolower($product->unit_type ?? '') === 'kg' && $vModel->size_value > 0) {
+                $multiplier = 1;
+                $sUnit = strtolower($vModel->size_unit ?? 'kg');
+                if ($sUnit === 'kg') $multiplier = (float)$vModel->size_value;
+                elseif (in_array($sUnit, ['gm','gram','grams'])) $multiplier = (float)$vModel->size_value / 1000;
+                
+                $qty = $qty * $multiplier;
+                if ($multiplier > 0) $price = $price / $multiplier;
+                $unit = 'KG';
+            } else if ($vId !== '') {
+                $unit = 'PIECE';
+            } else if ($product && (empty($unit) || is_numeric($unit))) {
+                $unit = strtoupper($product->unit_type ?? 'Piece');
+            }
+
             $items[] = [
                 'product_id' => $product->id ?? '',
-                'item_name'  => $product->item_name ?? $p,
-                'item_code'  => $product->item_code ?? ($codes[$index] ?? ''),
-                'brand'      => $product->brand->name ?? ($brands[$index] ?? ''),
-                'unit'       => (function() use ($product, $units, $index, $vids) {
-                    $u = $units[$index] ?? '';
-                    $vid = trim($vids[$index] ?? '');
-                    if ($vid !== '') return 'PIECE';
-                    if ($product && (empty($u) || is_numeric($u))) {
-                        return strtoupper($product->unit_type ?? 'Piece');
-                    }
-                    return $u ?: 'PIECE';
-                })(),
-                'price'      => floatval($prices[$index] ?? 0),
+                'item_name'  => $product ? $product->item_name : $p,
+                'item_code'  => $product ? $product->item_code : ($codes[$index] ?? ''),
+                'brand'      => $product && $product->brand ? $product->brand->name : ($brands[$index] ?? ''),
+                'unit'       => $unit ?: 'PIECE',
+                'price'      => $price,
                 'discount'   => floatval($discounts[$index] ?? 0),
-                'qty'        => intval($qtys[$index] ?? 1),
+                'qty'        => $qty,
                 'total'      => floatval($totals[$index] ?? 0),
                 'color'      => isset($colors_json[$index]) ? json_decode($colors_json[$index], true) : [],
             ];
