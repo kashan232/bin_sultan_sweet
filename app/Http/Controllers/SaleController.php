@@ -1732,7 +1732,12 @@ class SaleController extends Controller
 
             $unit = $units[$index] ?? '';
             if ($productModel && (empty($unit) || is_numeric($unit))) {
-                $unit = strtoupper($productModel->unit_type ?? 'Piece');
+                // If selling by variant, the unit represents pieces of that variant bag/box
+                if (!empty($variant_ids[$index])) {
+                    $unit = 'PIECE';
+                } else {
+                    $unit = strtoupper($productModel->unit_type ?? 'Piece');
+                }
             }
 
             $items[] = [
@@ -2156,6 +2161,7 @@ class SaleController extends Controller
         $discounts = explode(',', $sale->per_discount);
         $qtys     = explode(',', $sale->qty);
         $totals   = explode(',', $sale->per_total);
+        $vids     = explode(',', $sale->variant_id ?? '');
         $colors_json = json_decode($sale->color, true);
 
         $items = [];
@@ -2170,7 +2176,15 @@ class SaleController extends Controller
                 'item_name'  => $product->item_name ?? $p,
                 'item_code'  => $product->item_code ?? ($codes[$index] ?? ''),
                 'brand'      => $product->brand->name ?? ($brands[$index] ?? ''),
-                'unit'       => $product && (empty($units[$index] ?? '') || is_numeric($units[$index] ?? '')) ? strtoupper($product->unit_type ?? 'Piece') : ($units[$index] ?? ''),
+                'unit'       => (function() use ($product, $units, $index, $vids) {
+                    $u = $units[$index] ?? '';
+                    $vid = trim($vids[$index] ?? '');
+                    if ($vid !== '') return 'PIECE';
+                    if ($product && (empty($u) || is_numeric($u))) {
+                        return strtoupper($product->unit_type ?? 'Piece');
+                    }
+                    return $u ?: 'PIECE';
+                })(),
                 'price'      => floatval($prices[$index] ?? 0),
                 'discount'   => floatval($discounts[$index] ?? 0),
                 'qty'        => intval($qtys[$index] ?? 1),

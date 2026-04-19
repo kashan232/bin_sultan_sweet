@@ -707,6 +707,10 @@ class ReportingController extends Controller
                         if ($vid && $variantsDict->has($vid)) {
                             $v = $variantsDict->get($vid);
                             $name .= ' (' . ($v->size_label ?: $v->variant_name) . ')';
+                            
+                            // If selling by variant (e.g. 250g box), the quantity 
+                            // represents units/pieces of that variant, not raw KG.
+                            $unit = 'PIECE';
                         }
                         
                         $orderedNames[] = $name;
@@ -874,6 +878,8 @@ class ReportingController extends Controller
                     if ($vid && $variantsDict->has($vid)) {
                         $v = $variantsDict->get($vid);
                         $name .= ' (' . ($v->size_label ?: $v->variant_name) . ')';
+                        // If it's a variant, use Piece as unit
+                        $unit = 'PIECE';
                     }
 
                     $finalNames[]   = $name;
