@@ -1744,11 +1744,13 @@ class SaleController extends Controller
                 $qty = $qty * $multiplier;
                 if ($multiplier > 0) $price = $price / $multiplier;
                 $unit = 'KG';
-            } else if ($productModel && (empty($unit) || is_numeric($unit))) {
-                if (!empty($vId)) {
-                    $unit = 'PIECE';
+            } else if (empty($unit) || is_numeric($unit)) {
+                if ($vModel && !empty($vModel->size_unit)) {
+                    $unit = strtoupper($vModel->size_unit);
+                } else if ($productModel && !empty($productModel->unit_type)) {
+                    $unit = strtoupper($productModel->unit_type);
                 } else {
-                    $unit = strtoupper($productModel->unit_type ?? 'Piece');
+                    $unit = 'PIECE';
                 }
             }
 
@@ -2200,10 +2202,14 @@ class SaleController extends Controller
                 $qty = $qty * $multiplier;
                 if ($multiplier > 0) $price = $price / $multiplier;
                 $unit = 'KG';
-            } else if ($vId !== '') {
-                $unit = 'PIECE';
-            } else if ($product && (empty($unit) || is_numeric($unit))) {
-                $unit = strtoupper($product->unit_type ?? 'Piece');
+            } else if (empty($unit) || is_numeric($unit)) {
+                if ($vModel && !empty($vModel->size_unit)) {
+                    $unit = strtoupper($vModel->size_unit);
+                } else if ($product && !empty($product->unit_type)) {
+                    $unit = strtoupper($product->unit_type);
+                } else {
+                    $unit = 'PIECE';
+                }
             }
 
             $items[] = [

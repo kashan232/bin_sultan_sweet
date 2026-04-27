@@ -435,9 +435,10 @@
     SALE UNITS (Recalculated from Items)
     ================================ */
     $saleUnits = [
-        'Pc' => 0,
+        'Pc'  => 0,
         'Mtr' => 0,
-        'Yd' => 0,
+        'Yd'  => 0,
+        'Kg'  => 0,
     ];
 
     foreach($saleItems as $item) {
@@ -452,6 +453,8 @@
             $saleUnits['Mtr'] += $qty;
         } elseif (in_array($u, ['yd','yard','yards'])) {
             $saleUnits['Yd'] += $qty;
+        } elseif (in_array($u, ['kg','kilogram','kilograms','gm','gram','grams'])) {
+            $saleUnits['Kg'] += $qty;
         } else {
             $saleUnits['Pc'] += $qty; 
         }
@@ -461,9 +464,10 @@
     RETURN UNITS (calculate live)
     ================================ */
     $returnUnits = [
-    'Pc' => 0,
-    'Mtr' => 0,
-    'Yd' => 0,
+        'Pc'  => 0,
+        'Mtr' => 0,
+        'Yd'  => 0,
+        'Kg'  => 0,
     ];
 
     if ($saleReturn) {
@@ -478,11 +482,13 @@
       $unit=strtolower(trim($rUnits[$i] ?? '' ));
 
       if (in_array($unit, ['pc','pcs','piece','pieces'])) {
-      $returnUnits['Pc'] +=$qty;
+        $returnUnits['Pc'] +=$qty;
       } elseif (in_array($unit, ['mtr','meter','metre'])) {
-      $returnUnits['Mtr'] +=$qty;
+        $returnUnits['Mtr'] +=$qty;
       } elseif (in_array($unit, ['yd','yard','yards'])) {
-      $returnUnits['Yd'] +=$qty;
+        $returnUnits['Yd'] +=$qty;
+      } elseif (in_array($unit, ['kg','kilogram','kilograms','gm','gram','grams'])) {
+        $returnUnits['Kg'] +=$qty;
       }
       }
       }
@@ -490,7 +496,8 @@
       /*===============================FINAL UNITS=SALE - RETURN================================*/
       $finalUnits=[ 'Pc'=> max(0, $saleUnits['Pc'] - $returnUnits['Pc']),
       'Mtr' => max(0, $saleUnits['Mtr'] - $returnUnits['Mtr']),
-      'Yd' => max(0, $saleUnits['Yd'] - $returnUnits['Yd']),
+      'Yd'  => max(0, $saleUnits['Yd'] - $returnUnits['Yd']),
+      'Kg'  => max(0, $saleUnits['Kg'] - $returnUnits['Kg']),
       ];
       @endphp
       <!-- Totals -->
