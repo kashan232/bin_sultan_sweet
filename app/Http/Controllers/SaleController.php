@@ -1727,7 +1727,14 @@ class SaleController extends Controller
             $displayName = $productModel ? $productModel->item_name : $p;
             $catName = ($productModel && $productModel->category_relation) ? $productModel->category_relation->name : 'Uncategorized';
             
-            if ($variantName) {
+            if ($variantName && $productModel) {
+                // Remove product name from variant name if it repeats (e.g. "Gulabjamun - Gulabjamun 1kg" -> "Gulabjamun (1kg)")
+                $cleanVariant = trim(str_ireplace($productModel->item_name, '', $variantName));
+                $cleanVariant = ltrim($cleanVariant, ' -');
+                if ($cleanVariant !== '') {
+                    $displayName .= ' (' . $cleanVariant . ')';
+                }
+            } else if ($variantName) {
                 $displayName .= ' - ' . $variantName;
             }
 
@@ -2180,15 +2187,32 @@ class SaleController extends Controller
 
         $vObjects = \App\Models\ProductVariant::whereIn('id', array_filter($vids))->get()->keyBy('id');
 
-        $items = [];
+        $pObjects = Product::with('brand')->whereIn('id', array_filter($products))->get()->keyBy('id');
 
-        foreach ($products as $index => $p) {
-            $product = Product::where('item_name', trim($p))
-                ->orWhere('item_code', trim($codes[$index] ?? ''))
-                ->first();
+        foreach ($products as $index => $pId) {
+            $product = $pObjects[$pId] ?? null;
+            if (!$product) {
+                // Fallback search by name if ID fails (for old data)
+                $product = Product::where('item_name', trim($pId))
+                    ->orWhere('item_code', trim($codes[$index] ?? ''))
+                    ->first();
+            }
 
             $vId = trim($vids[$index] ?? '');
             $vModel = $vId ? ($vObjects[$vId] ?? null) : null;
+            $variantName = $vModel ? ($vModel->size_label ?: $vModel->variant_name) : '';
+            
+            $displayName = $product ? $product->item_name : $pId;
+            if ($variantName && $product) {
+                $cleanVariant = trim(str_ireplace($product->item_name, '', $variantName));
+                $cleanVariant = ltrim($cleanVariant, ' -');
+                if ($cleanVariant !== '') {
+                    $displayName .= ' (' . $cleanVariant . ')';
+                }
+            } else if ($variantName) {
+                $displayName .= ' - ' . $variantName;
+            }
+
             $price = floatval($prices[$index] ?? 0);
             $qty = floatval($qtys[$index] ?? 1);
             $unit = $units[$index] ?? '';
@@ -2214,7 +2238,7 @@ class SaleController extends Controller
 
             $items[] = [
                 'product_id' => $product->id ?? '',
-                'item_name'  => $product ? $product->item_name : $p,
+                'item_name'  => $displayName,
                 'item_code'  => $product ? $product->item_code : ($codes[$index] ?? ''),
                 'brand'      => $product && $product->brand ? $product->brand->name : ($brands[$index] ?? ''),
                 'unit'       => $unit ?: 'PIECE',
