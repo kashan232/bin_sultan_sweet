@@ -1728,9 +1728,13 @@ class SaleController extends Controller
             $catName = ($productModel && $productModel->category_relation) ? $productModel->category_relation->name : 'Uncategorized';
             
             if ($variantName && $productModel) {
-                // Remove product name from variant name if it repeats (e.g. "Gulabjamun - Gulabjamun 1kg" -> "Gulabjamun (1kg)")
-                $cleanVariant = trim(str_ireplace($productModel->item_name, '', $variantName));
+                // Remove redundant info like "(1.000 KG)" from variant name
+                $cleanVariant = preg_replace('/\s*\([\d.]+\s*KG\)/i', '', $variantName);
+                
+                // Remove product name from variant name if it repeats
+                $cleanVariant = trim(str_ireplace($productModel->item_name, '', $cleanVariant));
                 $cleanVariant = ltrim($cleanVariant, ' -');
+                
                 if ($cleanVariant !== '') {
                     $displayName .= ' (' . $cleanVariant . ')';
                 }
@@ -2204,8 +2208,13 @@ class SaleController extends Controller
             
             $displayName = $product ? $product->item_name : $pId;
             if ($variantName && $product) {
-                $cleanVariant = trim(str_ireplace($product->item_name, '', $variantName));
+                // Remove redundant info like "(1.000 KG)" from variant name
+                $cleanVariant = preg_replace('/\s*\([\d.]+\s*KG\)/i', '', $variantName);
+                
+                // Remove product name from variant name if it repeats
+                $cleanVariant = trim(str_ireplace($product->item_name, '', $cleanVariant));
                 $cleanVariant = ltrim($cleanVariant, ' -');
+                
                 if ($cleanVariant !== '') {
                     $displayName .= ' (' . $cleanVariant . ')';
                 }
