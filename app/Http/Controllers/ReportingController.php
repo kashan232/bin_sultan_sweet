@@ -1460,4 +1460,85 @@ class ReportingController extends Controller
             'total' => number_format($vouchers->sum('total_amount'), 2)
         ]);
     }
+
+    public function sale_closing_report()
+    {
+        return view('admin_panel.reporting.sale_closing_report');
+    }
+
+    public function fetchSaleClosingReport(Request $request)
+    {
+        $start = $request->start_date ?? date('Y-m-d');
+        $end   = $request->end_date   ?? date('Y-m-d');
+
+        // 1. Fetch Sales
+        $sales = DB::table('sales')
+            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59'])
+            ->select('id', 'invoice_no', 'total_net', 'created_at')
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        $totalSale = $sales->sum('total_net');
+
+        // 2. Fetch Expenses
+        $expenses = DB::table('expense_vouchers')
+            ->whereBetween('date', [$start, $end])
+            ->select('id', 'evid', 'amount', 'date', 'type', 'party_id')
+            ->orderBy('date', 'asc')
+            ->get();
+
+        $processedExpenses = [];
+        $totalExpense = 0;
+        foreach ($expenses as $ex) {
+            $amounts = json_decode($ex->amount, true) ?: [];
+            $sum = array_sum($amounts);
+            $totalExpense += $sum;
+            
+            $ex->total_amount = $sum;
+            $processedExpenses[] = $ex;
+        }
+
+        return response()->json([
+            'sales' => $sales,
+            'expenses' => $processedExpenses,
+            'total_sale' => $totalSale,
+            'total_expense' => $totalExpense,
+            'net_amount' => $totalSale - $totalExpense,
+            'start_date' => $start,
+            'end_date' => $end
+        ]);
+    }
+
+    public function printSaleClosingReport(Request $request)
+    {
+        $start = $request->start_date ?? date('Y-m-d');
+        $end   = $request->end_date   ?? date('Y-m-d');
+
+        $sales = DB::table('sales')
+            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59'])
+            ->select('id', 'invoice_no', 'total_net', 'created_at')
+            ->get();
+
+        $totalSale = $sales->sum('total_net');
+
+        $expenses = DB::table('expense_vouchers')
+            ->whereBetween('date', [$start, $end])
+            ->get();
+
+        $totalExpense = 0;
+        foreach ($expenses as $ex) {
+            $amounts = json_decode($ex->amount, true) ?: [];
+            $totalExpense += array_sum($amounts);
+        }
+
+        return view('admin_panel.reporting.sale_closing_print', [
+            'totalSale' => $totalSale,
+            'totalExpense' => $totalExpense,
+            'netAmount' => $totalSale - $totalExpense,
+            'startDate' => $start,
+            'endDate' => $end,
+            'salesCount' => $sales->count(),
+            'expensesCount' => $expenses->count()
+        ]);
+    }
 }

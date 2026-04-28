@@ -252,14 +252,24 @@
             <div class="modal-body">
                 <div class="sz-grid" id="szGrid"></div>
                 <div class="man-sec">
-                    <h6><i class="la la-edit"></i> Custom / Manual Entry
-                        <small class="text-muted fw-normal" style="font-size:10.5px"> — alag qty/weight? yahan enter karein, stock minus hoga</small>
-                    </h6>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h6 style="margin:0; font-size:14px; color:#333;"><i class="la la-edit"></i> Custom / Manual Entry</h6>
+                        <div id="kgHelpers" style="display:none; gap:15px; align-items:center;">
+                             <div class="d-flex align-items-center gap-2">
+                                <span style="font-size:13px; font-weight:700; color:#27ae60">By Grams:</span>
+                                <input type="number" id="hGrams" class="form-control" style="width:100px; height:34px; font-size:15px; font-weight:800; border-color:#27ae60" placeholder="e.g. 50">
+                             </div>
+                             <div class="d-flex align-items-center gap-2">
+                                <span style="font-size:13px; font-weight:700; color:#e67e22">By Price:</span>
+                                <input type="number" id="hPriceVal" class="form-control" style="width:100px; height:34px; font-size:15px; font-weight:800; border-color:#e67e22" placeholder="e.g. 100">
+                             </div>
+                        </div>
+                    </div>
                     <div class="row g-2">
                         <div class="col-4"><label class="form-label">Label</label>
                             <input type="text" id="mLabel" class="form-control" placeholder="e.g. 300g"></div>
                         <div class="col-2"><label class="form-label">Qty</label>
-                            <input type="number" id="mQty" class="form-control" value="1" min="0.01" step="any"></div>
+                            <input type="number" id="mQty" class="form-control" value="1" min="0.001" step="any"></div>
                         <div class="col-3"><label class="form-label">Unit Price (Rs)</label>
                             <input type="number" id="mPrice" class="form-control" value="0" min="0" step="any"></div>
                         <div class="col-3"><label class="form-label">Discount</label>
@@ -613,6 +623,65 @@ function openSzModal(p) {
     document.getElementById('mLabel').value=''; document.getElementById('mQty').value=1;
     document.getElementById('mPrice').value=p.price; document.getElementById('mDisc').value=0;
     showModal('szModal');
+    
+    // KG Helpers logic
+    const kgHelpers = document.getElementById('kgHelpers');
+    const hGrams = document.getElementById('hGrams');
+    const hPriceVal = document.getElementById('hPriceVal');
+    const mQty = document.getElementById('mQty');
+    const mPrice = document.getElementById('mPrice');
+    const mLabel = document.getElementById('mLabel');
+
+    hGrams.value = ''; hPriceVal.value = '';
+    let originalLabel = mLabel.value; // Store the initial label (product name or selected variant)
+
+    if (p.unit_type === 'kg') {
+        kgHelpers.style.display = 'flex';
+        
+        hGrams.oninput = function() {
+            let g = parseFloat(this.value) || 0;
+            let uPrice = parseFloat(mPrice.value) || 0;
+            if (g > 0) {
+                let qtyVal = (g / 1000);
+                mQty.value = qtyVal.toFixed(4);
+                mLabel.value = g + 'g';
+                if (uPrice > 0) {
+                    hPriceVal.value = Math.round(qtyVal * uPrice);
+                }
+            } else {
+                mQty.value = 1;
+                mLabel.value = originalLabel;
+                hPriceVal.value = '';
+            }
+        };
+
+        hPriceVal.oninput = function() {
+            let pVal = parseFloat(this.value) || 0;
+            let uPrice = parseFloat(mPrice.value) || 0;
+            if (pVal > 0 && uPrice > 0) {
+                let calculatedQty = pVal / uPrice;
+                mQty.value = calculatedQty.toFixed(5); 
+                let g = Math.round(calculatedQty * 1000);
+                mLabel.value = g + 'g (' + pVal + ' Rs)';
+                hGrams.value = g;
+            } else if (pVal === 0) {
+                mQty.value = 1;
+                mLabel.value = originalLabel;
+                hGrams.value = '';
+            }
+        };
+    } else {
+        kgHelpers.style.display = 'none';
+    }
+
+    // Update originalLabel when a variant is selected
+    window.updateManualLabel = function(newLabel) {
+        originalLabel = newLabel;
+        if (!hGrams.value && !hPriceVal.value) {
+            mLabel.value = newLabel;
+        }
+    };
+
     fetch(`${VAR_URL}/${p.id}`,{headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}})
     .then(r=>r.json()).then(data=>{ curProd.variants=data.variants; renderSizes(data.variants); })
     .catch(()=>{ document.getElementById('szGrid').innerHTML='<p class="text-danger">Size load failed.</p>'; });
@@ -666,7 +735,9 @@ function selectSz(el, i, v) {
     el.classList.add('sel');
     selVarI = i;
     document.getElementById('mPrice').value = v.price;
-    document.getElementById('mLabel').value = v.size_label || v.name || '';
+    const newLabel = v.size_label || v.name || '';
+    document.getElementById('mLabel').value = newLabel;
+    if (typeof window.updateManualLabel === 'function') window.updateManualLabel(newLabel);
     // Flash the price field to show it updated
     const pf = document.getElementById('mPrice');
     pf.style.background = '#e8f5e9';
@@ -805,7 +876,9 @@ function renderCart() {
 
         const qtyInput = document.createElement('input');
         qtyInput.type = 'number'; qtyInput.className = 'oi-qty';
-        qtyInput.value = item.qty; qtyInput.min = '0.01'; qtyInput.step = 'any';
+        // Clean display of qty
+        qtyInput.value = parseFloat(parseFloat(item.qty).toFixed(4)); 
+        qtyInput.min = '0.001'; qtyInput.step = 'any';
         qtyInput.setAttribute('data-idx', idx);
         qtyInput.addEventListener('change', function() { setQ(parseInt(this.dataset.idx), this.value); });
 

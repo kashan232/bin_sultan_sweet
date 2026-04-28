@@ -324,6 +324,10 @@ Route::middleware('auth')->group(function () {
     Route::get('report/sale', [ReportingController::class, 'sale_report'])->name('report.sale')->middleware('permission:Sale Report');
     Route::get('report/sale/fetch', [ReportingController::class, 'fetchsaleReport'])->name('report.sale.fetch');
 
+    Route::get('report/sale-closing', [ReportingController::class, 'sale_closing_report'])->name('report.sale_closing')->middleware('permission:Sale Report');
+    Route::get('report/sale-closing/fetch', [ReportingController::class, 'fetchSaleClosingReport'])->name('report.sale_closing.fetch');
+    Route::get('report/sale-closing/print', [ReportingController::class, 'printSaleClosingReport'])->name('report.sale_closing.print');
+
 
     Route::get('report/sale/category', [ReportingController::class, 'sale_report_category'])->name('report.sale.category')->middleware('permission:Sale Report');
     Route::get('report/sale/category/fetch', [ReportingController::class, 'fetchsalecategoryReport'])->name('report.sale.category.fetch');

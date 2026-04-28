@@ -250,6 +250,12 @@
                                     </a>
                                 </li>
 
+                                <li>
+                                    <a href="{{ route('report.sale_closing') }}">
+                                        <i class="fa-solid fa-file-invoice"></i> Sale Closing Report
+                                    </a>
+                                </li>
+
                                 @endcan
 
 
