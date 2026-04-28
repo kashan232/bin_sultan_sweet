@@ -642,6 +642,7 @@ $(document).ready(function() {
                     <input type="number" name="variant_size_value[]" class="form-control variant-size-input"
                         placeholder="${getPlaceholder(unitType)}" step="0.01" min="0" value="${sizeValue}">
                     <input type="hidden" name="variant_size_unit[]" class="variant-size-unit-hidden" value="${unitType}">
+                    <input type="hidden" name="variant_id[]" value="${data.id || ''}">
                     <div class="gram-display" id="gramDisplay_${idx}"></div>
                 </div>
                 <div class="col-md-3">
@@ -657,7 +658,7 @@ $(document).ready(function() {
                 <div class="col-md-1 variant-stock-col" style="display: ${unitType === 'kg' ? 'none' : 'block'}">
                     <label class="form-label small fw-bold">Stock</label>
                     <input type="number" name="variant_stock[]" class="form-control"
-                        placeholder="0" step="0.01" value="${data.stock_qty || 0}">
+                        placeholder="0" step="0.01" value="${data.stock_qty || 0}" ${data.id ? 'readonly' : ''}>
                 </div>
             </div>
         `;

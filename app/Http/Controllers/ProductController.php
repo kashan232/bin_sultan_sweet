@@ -378,26 +378,32 @@ class ProductController extends Controller
                 'image'           => $imagePath,
             ]);
 
-            // Remove old variants and their stocks to avoid duplicates/orphans
-            ProductVariant::where('product_id', $product->id)->delete();
-            DB::table('stocks')->where('product_id', $product->id)->delete();
-
-            // --- Save Product Variants ---
+            // --- Sync Product Variants ---
+            $variantIds = $request->input('variant_id', []);
             $variantNames = $request->input('variant_name', []);
             $variantSizeValues = $request->input('variant_size_value', []);
             $variantSizeUnits = $request->input('variant_size_unit', []);
             $variantPrices = $request->input('variant_price', []);
             $variantCostPrices = $request->input('variant_cost_price', []);
             $variantStocks = $request->input('variant_stock', []);
-            $variantDefault = $request->input('variant_default', 0); // index of default variant
+            $variantDefault = $request->input('variant_default', 0);
 
-            $totalStock = 0;
+            // 1. Delete removed variants and their stocks
+            $keepVariantIds = array_filter($variantIds);
+            ProductVariant::where('product_id', $product->id)
+                ->whereNotIn('id', $keepVariantIds)
+                ->each(function($v) use ($product) {
+                    DB::table('stocks')->where('product_id', $product->id)->where('variant_id', $v->id)->delete();
+                    $v->delete();
+                });
+
             $defaultPrice = 0;
 
             if (!empty($variantNames)) {
                 foreach ($variantNames as $index => $vName) {
                     if (empty($vName)) continue;
 
+                    $vId = $variantIds[$index] ?? null;
                     $sizeValue = floatval($variantSizeValues[$index] ?? 0);
                     $sizeUnit = $variantSizeUnits[$index] ?? $request->input('unit_type');
 
@@ -414,7 +420,7 @@ class ProductController extends Controller
                     $vStock = floatval($variantStocks[$index] ?? 0);
                     $isDefault = ((int)$variantDefault === $index);
 
-                    $variant = ProductVariant::create([
+                    $variantData = [
                         'product_id'      => $product->id,
                         'variant_name'    => $vName,
                         'size_label'      => $sizeLabel,
@@ -423,33 +429,41 @@ class ProductController extends Controller
                         'price'           => $vPrice,
                         'wholesale_price' => 0,
                         'cost_price'      => $vCost,
-                        'stock_qty'       => $vStock,
                         'alert_quantity'  => 0,
                         'is_default'      => $isDefault,
                         'is_active'       => true,
-                    ]);
+                    ];
 
-                    // Single variant stock entry
-                    DB::table('stocks')->insert([
-                        'branch_id'    => 1,
-                        'warehouse_id' => 1,
-                        'product_id'   => $product->id,
-                        'variant_id'   => $variant->id,
-                        'qty'          => $vStock,
-                        'created_at'   => now(),
-                        'updated_at'   => now(),
-                    ]);
+                    if ($vId) {
+                        // Update existing
+                        $variant = ProductVariant::findOrFail($vId);
+                        $variant->update($variantData);
+                        // Stock is preserved for existing variants
+                    } else {
+                        // Create new
+                        $variantData['stock_qty'] = $vStock;
+                        $variant = ProductVariant::create($variantData);
 
-                    $totalStock += $vStock;
+                        // Insert initial stock for new variant
+                        DB::table('stocks')->insert([
+                            'branch_id'    => 1,
+                            'warehouse_id' => 1,
+                            'product_id'   => $product->id,
+                            'variant_id'   => $variant->id,
+                            'qty'          => $vStock,
+                            'created_at'   => now(),
+                            'updated_at'   => now(),
+                        ]);
+                    }
+
                     if ($isDefault) {
                         $defaultPrice = $vPrice;
                     }
                 }
 
-                // Update product with default variant price
+                // Update product metadata
                 $product->update([
-                    'price'           => $defaultPrice,
-                    'initial_stock'   => $totalStock,
+                    'price' => $defaultPrice,
                 ]);
             }
 
