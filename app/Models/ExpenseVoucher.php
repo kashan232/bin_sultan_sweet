@@ -58,6 +58,11 @@ class ExpenseVoucher extends Model
         return $this->belongsTo(Account::class, 'party_id', 'id');
     }
 
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id', 'id');
+    }
+
     /**
      * Helper Attributes
      */

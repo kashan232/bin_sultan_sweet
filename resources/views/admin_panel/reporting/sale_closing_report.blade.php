@@ -18,10 +18,23 @@
                             <label class="form-label fw-bold">Start Date</label>
                             <input type="date" name="start_date" id="start_date" class="form-control" value="{{ date('Y-m-d') }}">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label fw-bold">End Date</label>
                             <input type="date" name="end_date" id="end_date" class="form-control" value="{{ date('Y-m-d') }}">
                         </div>
+                        @if(auth()->user()->hasRole('Admin'))
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">User / Cashier</label>
+                            <select name="user_id" id="user_id" class="form-control">
+                                <option value="all">All Users</option>
+                                @foreach($users as $u)
+                                    <option value="{{ $u->id }}">{{ $u->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        @else
+                            <input type="hidden" id="user_id" value="{{ auth()->id() }}">
+                        @endif
                         <div class="col-md-2">
                             <button type="button" id="btnSearch" class="btn btn-primary w-100">
                                 <i class="la la-search"></i> Search
@@ -123,18 +136,20 @@
         $('#btnPrint').on('click', function() {
             let start = $('#start_date').val();
             let end = $('#end_date').val();
-            window.open("{{ route('report.sale_closing.print') }}?start_date=" + start + "&end_date=" + end, '_blank');
+            let user = $('#user_id').val();
+            window.open("{{ route('report.sale_closing.print') }}?start_date=" + start + "&end_date=" + end + "&user_id=" + user, '_blank');
         });
 
         function fetchData() {
             let start = $('#start_date').val();
             let end = $('#end_date').val();
+            let user = $('#user_id').val();
 
             $("#loader").show();
             $.ajax({
                 url: "{{ route('report.sale_closing.fetch') }}",
                 type: "GET",
-                data: { start_date: start, end_date: end },
+                data: { start_date: start, end_date: end, user_id: user },
                 success: function(res) {
                     $("#loader").hide();
                     

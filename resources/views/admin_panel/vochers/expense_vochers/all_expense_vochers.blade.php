@@ -10,7 +10,43 @@
             <h4 class="mb-0">Expense Vouchers</h4>
             <a class="btn btn-primary" href="{{ route('expense-vochers') }}">Add Expense Voucher</a>
         </div>
-        <div class="card shadow mt-5 mb-5">
+        <div class="card shadow mt-4">
+            <div class="card-body">
+                <form action="{{ route('all-expense-vochers') }}" method="GET" class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Start Date</label>
+                        <input type="date" name="start_date" class="form-control" value="{{ request('start_date') }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">End Date</label>
+                        <input type="date" name="end_date" class="form-control" value="{{ request('end_date') }}">
+                    </div>
+                    @if(auth()->user()->hasRole('Admin'))
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">User / Cashier</label>
+                        <select name="user_id" class="form-control">
+                            <option value="all">All Users</option>
+                            @foreach($users as $u)
+                                <option value="{{ $u->id }}" {{ request('user_id') == $u->id ? 'selected' : '' }}>
+                                    {{ $u->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @endif
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-filter"></i> Filter
+                        </button>
+                        <a href="{{ route('all-expense-vochers') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-clockwise"></i> Reset
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card shadow mt-4 mb-5">
             <div class="card-body">
                 <div class="table-responsive">
                     <table id="productTable" class="table table-striped table-bordered align-middle nowrap" style="width:100%">
@@ -23,6 +59,7 @@
                                 <th style="min-width:260px;">Remarks</th>
                                 <th>Total Amount</th>
                                 <th>Date</th>
+                                <th>User</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -59,6 +96,11 @@
                                     Rs {{ number_format($voucher->total_amount, 2) }}
                                 </td>
                                 <td>{{ \Carbon\Carbon::parse($voucher->date)->format('d-m-Y') }}</td>
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        {{ $voucher->user->name ?? 'Admin' }}
+                                    </span>
+                                </td>
                                 <td>
                                     <a href="{{ route('expenseVoucher.print', $voucher->id) }}"
                                         target="_blank"

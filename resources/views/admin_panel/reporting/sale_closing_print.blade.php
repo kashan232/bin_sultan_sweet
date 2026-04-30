@@ -40,6 +40,7 @@
         <h2>Bin Sultan Sweets</h2>
         <p>Sale Closing Report</p>
         <p>Period: {{ $startDate }} to {{ $endDate }}</p>
+        <p>User: {{ $userName }}</p>
     </div>
 
     <div class="title">DAILY CLOSING</div>

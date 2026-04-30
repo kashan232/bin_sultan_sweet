@@ -624,6 +624,7 @@ class VoucherController extends Controller
             // ✅ Save Voucher
             $voucher = ExpenseVoucher::create([
                 'evid'         => $request->evid,
+                'user_id'      => auth()->id(), // ✅ Save current user ID
                 'entry_date'   => now(),
                 'date'         => $request->date,
                 'type'         => $request->vendor_type, // Account Head
@@ -658,10 +659,29 @@ class VoucherController extends Controller
     }
 
 
-    public function all_expense_vochers()
+    public function all_expense_vochers(Request $request)
     {
-        $vouchers = ExpenseVoucher::with(['accountHeadType', 'partyAccount', 'vendor', 'customer'])->orderBy('id', 'desc')->get();
-        return view('admin_panel.vochers.expense_vochers.all_expense_vochers', compact('vouchers'));
+        $query = ExpenseVoucher::with(['accountHeadType', 'partyAccount', 'vendor', 'customer', 'user']);
+
+        // 🛡️ Restrict non-admin users to their own expenses
+        if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
+            $query->where('user_id', auth()->id());
+        } elseif ($request->filled('user_id') && $request->user_id !== 'all') {
+            // 🔎 Admin can filter by specific user
+            $query->where('user_id', $request->user_id);
+        }
+
+        // 📅 Date Filtering
+        if ($request->filled('start_date')) {
+            $query->whereDate('date', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('date', '<=', $request->end_date);
+        }
+
+        $vouchers = $query->orderBy('id', 'desc')->get();
+        $users = \App\Models\User::all();
+        return view('admin_panel.vochers.expense_vochers.all_expense_vochers', compact('vouchers', 'users'));
     }
 
     public function expenseprint($id)

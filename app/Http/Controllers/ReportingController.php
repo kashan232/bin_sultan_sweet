@@ -1385,6 +1385,11 @@ class ReportingController extends Controller
         if ($request->hasAny(['account_heads', 'accounts', 'start_date', 'end_date'])) {
 
             $query = \App\Models\ExpenseVoucher::query();
+            
+            // 🛡️ Restrict non-admin users to their own expenses
+            if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
+                $query->where('user_id', auth()->id());
+            }
 
             // Account Head filter (type = account_head_id)
             if ($request->filled('account_heads') && !in_array('all', $request->account_heads)) {
@@ -1419,6 +1424,11 @@ class ReportingController extends Controller
     public function expenseVoucherAjax(Request $request)
     {
         $query = \App\Models\ExpenseVoucher::query();
+
+        // 🛡️ Restrict non-admin users to their own expenses
+        if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
+            $query->where('user_id', auth()->id());
+        }
 
         // Account Head (type)
         if ($request->filled('account_heads') && !in_array('all', $request->account_heads)) {
@@ -1463,27 +1473,43 @@ class ReportingController extends Controller
 
     public function sale_closing_report()
     {
-        return view('admin_panel.reporting.sale_closing_report');
+        $users = \App\Models\User::all();
+        return view('admin_panel.reporting.sale_closing_report', compact('users'));
     }
 
     public function fetchSaleClosingReport(Request $request)
     {
         $start = $request->start_date ?? date('Y-m-d');
         $end   = $request->end_date   ?? date('Y-m-d');
+        $userId = $request->user_id;
 
         // 1. Fetch Sales
-        $sales = DB::table('sales')
-            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59'])
-            ->select('id', 'invoice_no', 'total_net', 'created_at')
+        $salesQuery = DB::table('sales')
+            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59']);
+
+        if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
+            $salesQuery->where('user_id', auth()->id());
+        } elseif ($userId && $userId !== 'all') {
+            $salesQuery->where('user_id', $userId);
+        }
+
+        $sales = $salesQuery->select('id', 'invoice_no', 'total_net', 'created_at')
             ->orderBy('created_at', 'asc')
             ->get();
 
         $totalSale = $sales->sum('total_net');
 
         // 2. Fetch Expenses
-        $expenses = DB::table('expense_vouchers')
-            ->whereBetween('date', [$start, $end])
-            ->select('id', 'evid', 'amount', 'date', 'type', 'party_id')
+        $expenseQuery = DB::table('expense_vouchers')
+            ->whereBetween('date', [$start, $end]);
+
+        if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
+            $expenseQuery->where('user_id', auth()->id());
+        } elseif ($userId && $userId !== 'all') {
+            $expenseQuery->where('user_id', $userId);
+        }
+
+        $expenses = $expenseQuery->select('id', 'evid', 'amount', 'date', 'type', 'party_id')
             ->orderBy('date', 'asc')
             ->get();
 
@@ -1513,22 +1539,45 @@ class ReportingController extends Controller
     {
         $start = $request->start_date ?? date('Y-m-d');
         $end   = $request->end_date   ?? date('Y-m-d');
+        $userId = $request->user_id;
 
-        $sales = DB::table('sales')
-            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59'])
-            ->select('id', 'invoice_no', 'total_net', 'created_at')
+        $salesQuery = DB::table('sales')
+            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59']);
+
+        if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
+            $salesQuery->where('user_id', auth()->id());
+        } elseif ($userId && $userId !== 'all') {
+            $salesQuery->where('user_id', $userId);
+        }
+
+        $sales = $salesQuery->select('id', 'invoice_no', 'total_net', 'created_at')
             ->get();
 
         $totalSale = $sales->sum('total_net');
 
-        $expenses = DB::table('expense_vouchers')
-            ->whereBetween('date', [$start, $end])
-            ->get();
+        $expenseQuery = DB::table('expense_vouchers')
+            ->whereBetween('date', [$start, $end]);
+
+        if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
+            $expenseQuery->where('user_id', auth()->id());
+        } elseif ($userId && $userId !== 'all') {
+            $expenseQuery->where('user_id', $userId);
+        }
+
+        $expenses = $expenseQuery->get();
 
         $totalExpense = 0;
         foreach ($expenses as $ex) {
             $amounts = json_decode($ex->amount, true) ?: [];
             $totalExpense += array_sum($amounts);
+        }
+
+        $userName = 'All Users';
+        if ($userId && $userId !== 'all') {
+            $user = \App\Models\User::find($userId);
+            if ($user) {
+                $userName = $user->name;
+            }
         }
 
         return view('admin_panel.reporting.sale_closing_print', [
@@ -1538,7 +1587,8 @@ class ReportingController extends Controller
             'startDate' => $start,
             'endDate' => $end,
             'salesCount' => $sales->count(),
-            'expensesCount' => $expenses->count()
+            'expensesCount' => $expenses->count(),
+            'userName' => $userName
         ]);
     }
 }

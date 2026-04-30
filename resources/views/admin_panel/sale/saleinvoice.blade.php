@@ -237,6 +237,7 @@
       @foreach($categoryGroups as $categoryName => $groupItems)
       <div class="receipt-container @if(!$loop->last || $mode == 'token_and_invoice') page-break @endif">
           <div class="center">
+              <img src="{{ asset('assets/images/logo.jpeg') }}" alt="Logo" style="max-height: 60px; margin-bottom: 5px;">
               <div class="store-name">Bin Sultan</div>
               <div style="font-weight:bold; border:1px dashed #000; padding:4px; margin:5px 0;">TOKEN ({{ strtoupper($categoryName) }})</div>
               <p style="margin:5px 0; font-size:14px; font-weight:bold;">Order: {{ $sale->order_type ?? 'Walk-in' }} @if($sale->table_id) | Table: {{ \App\Models\Table::find($sale->table_id)->table_name ?? '' }} @endif</p>
@@ -282,6 +283,7 @@
   <div class="receipt-container">
     <!-- Header -->
     <div class="center">
+      <img src="{{ asset('assets/images/logo.jpeg') }}" alt="Logo" style="max-height: 80px; margin-bottom: 5px;">
       <div class="store-name">Bin Sultan</div>
       <div class="store-info">Sweet & Bakers</div>
       <div class="store-info">Latifabad no 6 Near Shadman Hall Hyderabad</div>
