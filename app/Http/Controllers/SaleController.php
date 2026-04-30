@@ -688,9 +688,9 @@ class SaleController extends Controller
             }
 
             // --- Choose model ---
-            if ($action === 'booking') {
-                $model = $booking_id ? \App\Models\ProductBooking::findOrFail($booking_id) : new \App\Models\ProductBooking();
-            } else { // 'sale' or 'save_token'
+            if ($action === 'booking' || ($action === 'sale' && !empty($booking_id))) {
+                $model = !empty($booking_id) ? \App\Models\ProductBooking::findOrFail($booking_id) : new \App\Models\ProductBooking();
+            } else { // 'sale' or 'save_token' (new direct sale)
                 $model = new \App\Models\Sale();
                 $model->invoice_no = \App\Models\Sale::generateInvoiceNo();
             }
@@ -711,26 +711,38 @@ class SaleController extends Controller
             $model->total_bill_amount    = $request->total_subtotal ?? array_sum($combined_totals);
             $model->total_extradiscount  = $request->total_extra_cost ?? 0;
             $model->total_net            = $request->total_net ?? array_sum($combined_totals);
-            $model->cash                 = $request->cash ?? 0;
-            $model->card                 = $request->card ?? 0;
-            $model->change               = $request->change ?? 0;
+            
+            // For bookings, we track advance and final payment
+            if ($model instanceof \App\Models\ProductBooking) {
+                if ($action === 'sale') {
+                    $model->sale_date = now();
+                    // Final payment reconciliation: 
+                    // advance_payment stays as it was, 'cash' and 'card' are updated with what was received today.
+                    // (Or we can store total in cash/card and keep advance separate)
+                    $model->cash = $request->cash ?? 0;
+                    $model->card = $request->card ?? 0;
+                    $model->change = $request->change ?? 0;
+                } else {
+                    // This is a new booking or edit of unconfirmed booking
+                    $model->advance_payment = $request->advance_payment ?? $request->cash ?? 0;
+                    $model->booking_date = $model->booking_date ?? now();
+                }
+            } else {
+                // New direct sale
+                $model->cash   = $request->cash ?? 0;
+                $model->card   = $request->card ?? 0;
+                $model->change = $request->change ?? 0;
+            }
+
             $model->total_items          = $total_items;
             $model->variant_id           = implode(',', $combined_variant_ids);
             $model->total_pieces          = $request->total_pieces;
             $model->total_meter          = $request->total_meter;
 
             if ($model instanceof \App\Models\Sale) {
-                $model->user_id = auth()->id(); // Save User ID only for Sales
+                $model->user_id = auth()->id();
                 $model->order_type = $request->order_type ?? 'Walk-in';
                 $model->table_id = $request->table_id ?? null;
-            }
-
-            // Booking-specific field
-            if ($action === 'booking') {
-                $model->advance_payment = isset($request->advance_payment) ? floatval($request->advance_payment) : 0;
-                if (empty($model->booking_date)) {
-                    $model->booking_date = now();
-                }
             }
             
             // Table status logic for Dine-in
@@ -740,15 +752,12 @@ class SaleController extends Controller
                     if ($action === 'save_token') {
                         $table->status = 'occupied';
                     } elseif ($action === 'sale') {
-                        // Table only becomes available if full payment received
                         $totalNet   = floatval($request->total_net ?? 0);
-                        $cashPaid   = floatval($request->cash ?? 0);
-                        $cardPaid   = floatval($request->card ?? 0);
-                        $totalPaid  = $cashPaid + $cardPaid;
+                        $totalPaid  = floatval($request->cash ?? 0) + floatval($request->card ?? 0);
                         if ($totalPaid >= $totalNet && $totalNet > 0) {
                             $table->status = 'available';
                         } else {
-                            $table->status = 'occupied'; // still has remaining balance
+                            $table->status = 'occupied';
                         }
                     }
                     $table->save();
@@ -757,40 +766,23 @@ class SaleController extends Controller
 
             $model->save();
 
-            // If this request is confirming a booking (we came from bookings -> Confirm)
-            // and action is 'sale' and booking_id present, mark the original booking as sold.
-            if ($action === 'sale' && !empty($booking_id)) {
-                $booking = \App\Models\ProductBooking::find($booking_id);
-                if ($booking) {
-                    $booking->sale_date = now();
-                    // keep any previously stored advance_payment but allow overriding from request.cash or request.advance_payment
-                    if ($request->has('advance_payment')) {
-                        $booking->advance_payment = floatval($request->advance_payment);
-                    } elseif ($request->has('cash') && floatval($request->cash) > 0) {
-                        // if user put cash in confirm form and booking had advance, you may want to add or replace.
-                        // here we set booking cash to the cash given at confirm (simple approach)
-                        $booking->advance_payment = floatval($request->cash);
-                    }
-                    $booking->save();
-                }
-            }
-
-            // ledger update for sale
+            // Ledger update (only for confirmed sales or direct sales)
             if ($action === 'sale') {
                 $customer_id = $request->customer;
                 if ($customer_id !== 'Walk-in Customer') {
                     $ledger = \App\Models\CustomerLedger::where('customer_id', $customer_id)->latest('id')->first();
+                    $net = floatval($request->total_net ?? 0);
                     if ($ledger) {
                         $ledger->previous_balance = $ledger->closing_balance;
-                        $ledger->closing_balance += $request->total_net;
+                        $ledger->closing_balance += $net;
                         $ledger->save();
                     } else {
                         \App\Models\CustomerLedger::create([
                             'customer_id'      => $customer_id,
                             'admin_or_user_id' => auth()->id(),
                             'previous_balance' => 0,
-                            'closing_balance'  => $request->total_net,
-                            'opening_balance'  => $request->total_net,
+                            'closing_balance'  => $net,
+                            'opening_balance'  => $net,
                         ]);
                     }
                 }
@@ -799,32 +791,22 @@ class SaleController extends Controller
             DB::commit();
 
             // Redirect logic
-            if ($action === 'sale' || $action === 'save_token') {
+            if ($model instanceof \App\Models\Sale) {
                 $returnTo = route('sale.add');
-                
-                // Determine print mode
-                $printMode = 'invoice';
-                if ($action === 'save_token') {
-                    $printMode = 'token_only';
-                } elseif (in_array($model->order_type ?? '', ['Takeaway'])) {
-                    $printMode = 'token_and_invoice'; // Print token then invoice for Takeaway
-                }
-                
+                $printMode = ($action === 'save_token') ? 'token_only' : (in_array($model->order_type ?? '', ['Takeaway']) ? 'token_and_invoice' : 'invoice');
                 $invoiceUrl = route('sales.invoice', $model->id) . '?return_to=' . urlencode($returnTo) . '&autoprint=1&mode=' . $printMode;
-                
-                return redirect()->to($invoiceUrl)->with('success', $action === 'save_token' ? 'Order Saved and Token Generated.' : 'Sale completed.');
+                return redirect()->to($invoiceUrl)->with('success', $action === 'save_token' ? 'Order Saved.' : 'Sale completed.');
+            } else {
+                // ProductBooking
+                if ($action === 'sale') {
+                    // Confirmation: Go back to list with alert
+                    return redirect()->route('bookings.index')->with('success', 'Booking Confirmed Successfully.');
+                }
+                // New Booking or Edit: Show Receipt
+                $returnTo = route('bookings.index');
+                $receiptUrl = route('booking.receipt', $model->id) . '?return_to=' . urlencode($returnTo) . '&autoprint=1';
+                return redirect()->to($receiptUrl)->with('success', 'Booking Saved Successfully.');
             }
-
-            if ($action === 'booking') {
-                $returnTo = route('sale.add'); // agar booking add ka page hai
-                $receiptUrl = route('booking.receipt', $model->id)
-                    . '?return_to=' . urlencode($returnTo)
-                    . '&autoprint=1';
-
-                return redirect()->to($receiptUrl)->with('success', 'Booking created successfully.');
-            }
-
-            return back()->with('success', 'Saved.');
         } catch (\Exception $e) {
             DB::rollback();
             return back()->with('error', 'Error: ' . $e->getMessage());
@@ -1083,58 +1065,76 @@ class SaleController extends Controller
 
     public function convertFromBooking($id)
     {
-        $booking = ProductBooking::findOrFail($id);
+        $booking = ProductBooking::with('customer_relation')->findOrFail($id);
         $customers = Customer::all();
 
-        // Decode fields
-        $products     = explode(',', $booking->product);
-        $codes        = explode(',', $booking->product_code);
-        $brands       = explode(',', $booking->brand);
-        $units        = explode(',', $booking->unit);
-        $prices       = explode(',', $booking->per_price);
-        $discounts    = explode(',', $booking->per_discount);
-        $qtys         = explode(',', $booking->qty);
-        $totals       = explode(',', $booking->per_total);
-
-        // Colors: double JSON decode fix
-        $colors_json  = json_decode($booking->color, true); // this gives array of encoded strings
+        // --- Parsing logic (identical to ProductBookingController@receipt) ---
+        $products    = explode(',', $booking->product);
+        $codes       = explode(',', $booking->product_code);
+        $brands      = explode(',', $booking->brand);
+        $units       = explode(',', $booking->unit);
+        $prices      = explode(',', $booking->per_price);
+        $discounts   = explode(',', $booking->per_discount);
+        $qtys        = explode(',', $booking->qty);
+        $totals      = explode(',', $booking->per_total);
+        $variant_ids = explode(',', $booking->variant_id ?? '');
 
         $items = [];
+        $productIds = array_unique($products);
+        $productMap = Product::with('category_relation', 'brand')->whereIn('id', $productIds)->get()->keyBy('id');
+        $variantMap = \App\Models\ProductVariant::whereIn('id', array_filter($variant_ids))->get()->keyBy('id');
 
         foreach ($products as $index => $p) {
-            // Get product details
-            $product = Product::where('item_name', trim($p))
-                ->orWhere('item_code', trim($codes[$index] ?? ''))
-                ->first();
+            $qty = (float)($qtys[$index] ?? 0);
+            if ($qty <= 0) continue;
 
-            // Fix color decoding
-            $rawColor = $colors_json[$index] ?? null;
-            $availableColors = [];
+            $vId = $variant_ids[$index] ?? '';
+            $vModel = $vId ? ($variantMap[$vId] ?? null) : null;
+            $variantName = $vModel ? ($vModel->size_label ?: $vModel->variant_name) : '';
+            $productModel = $productMap[$p] ?? null;
+            $displayName = $productModel ? $productModel->item_name : $p;
+            $catName = ($productModel && $productModel->category_relation) ? $productModel->category_relation->name : 'Uncategorized';
 
-            if (is_string($rawColor)) {
-                $decoded = json_decode($rawColor, true);
+            if ($variantName && $productModel) {
+                $cleanVariant = preg_replace('/\s*\([\d.]+\s*KG\)/i', '', $variantName);
+                $cleanVariant = trim(str_ireplace($productModel->item_name, '', $cleanVariant));
+                $cleanVariant = ltrim($cleanVariant, ' -');
+                if ($cleanVariant !== '') $displayName .= ' (' . $cleanVariant . ')';
+            } else if ($variantName) {
+                $displayName .= ' - ' . $variantName;
+            }
 
-                if (is_array($decoded)) {
-                    $availableColors = $decoded;
-                } elseif (!is_null($decoded)) {
-                    $availableColors = [$decoded];
-                }
-            } elseif (is_array($rawColor)) {
-                $availableColors = $rawColor;
+            $unit = $units[$index] ?? '';
+            $price = (float)($prices[$index] ?? 0);
+
+            // Weight conversion logic
+            if ($vModel && $productModel && strtolower($productModel->unit_type ?? '') === 'kg' && $vModel->size_value > 0) {
+                $multiplier = 1;
+                $sUnit = strtolower($vModel->size_unit ?? 'kg');
+                if ($sUnit === 'kg') $multiplier = (float)$vModel->size_value;
+                elseif (in_array($sUnit, ['gm','gram','grams'])) $multiplier = (float)$vModel->size_value / 1000;
+                
+                $qty = $qty * $multiplier;
+                if ($multiplier > 0) $price = $price / $multiplier;
+                $unit = 'KG';
+            } else if (empty($unit) || is_numeric($unit)) {
+                if ($vModel && !empty($vModel->size_unit)) $unit = strtoupper($vModel->size_unit);
+                else if ($productModel && !empty($productModel->unit_type)) $unit = strtoupper($productModel->unit_type);
+                else $unit = 'PIECE';
             }
 
             $items[] = [
-                'product_id'        => $product->id ?? '',
-                'item_name'         => $product->item_name ?? $p,
-                'item_code'         => $product->item_code ?? ($codes[$index] ?? ''),
-                'uom'               => $product->brand->name ?? ($brands[$index] ?? ''),
-                'unit'              => $product->unit_id ?? ($units[$index] ?? ''),
-                'price'             => floatval($prices[$index] ?? 0),
-                'discount'          => floatval($discounts[$index] ?? 0),
-                'qty'               => intval($qtys[$index] ?? 1),
-                'total'             => floatval($totals[$index] ?? 0),
-                'available_colors'  => $availableColors,                  // 👈 list of all dropdown options
-                'color'             => $availableColors[0] ?? null,       // 👈 selected option
+                'product_id' => $productModel->id ?? '',
+                'item_name' => $displayName,
+                'category'  => $catName,
+                'item_code' => $codes[$index] ?? '',
+                'uom'       => $productModel && $productModel->brand ? $productModel->brand->name : ($brands[$index] ?? ''),
+                'unit'      => $unit,
+                'price'     => $price,
+                'discount'  => (float)($discounts[$index] ?? 0),
+                'qty'       => $qty,
+                'total'     => (float)($totals[$index] ?? 0),
+                'available_colors' => [], // Add if needed, keeping for compatibility
             ];
         }
 

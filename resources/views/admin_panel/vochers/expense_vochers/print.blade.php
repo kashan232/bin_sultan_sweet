@@ -275,8 +275,8 @@
     <!-- <div class="footer">
       <div>Printed: {{ now()->format('H:i:s, d M Y') }}</div>
 
-      <div style="margin-top:6px;">
-        <div>Develop By: ProWave Technologies</div>
+      <div style="margin-top:6px; font-size: 11px; font-weight: normal;">
+        <div>Develop By: ProWave Software Solutions</div>
         <div>+92 317 3836 223 | +92 317 3859 647</div>
         <div style="margin-top:6px; font-weight:800;">*** Thank you for the visit ***</div>
       </div>

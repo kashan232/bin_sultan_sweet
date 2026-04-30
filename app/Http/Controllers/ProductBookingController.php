@@ -18,8 +18,80 @@ class ProductBookingController extends Controller
     }
     public function receipt($id)
     {
-        $booking = ProductBooking::with('customer_relation', 'productt')->findOrFail($id);
-        return view('admin_panel.booking.receipt', compact('booking'));
+        $booking = ProductBooking::with('customer_relation')->findOrFail($id);
+
+        // --- Parsing logic (adapted from SaleController@saleinvoice) ---
+        $products    = explode(',', $booking->product);
+        $codes       = explode(',', $booking->product_code);
+        $brands      = explode(',', $booking->brand);
+        $units       = explode(',', $booking->unit);
+        $prices      = explode(',', $booking->per_price);
+        $discounts   = explode(',', $booking->per_discount);
+        $qtys        = explode(',', $booking->qty);
+        $totals      = explode(',', $booking->per_total);
+        $variant_ids = explode(',', $booking->variant_id ?? '');
+
+        $items = [];
+        $productIds = array_unique($products);
+        $productMap = Product::with('category_relation')->whereIn('id', $productIds)->get()->keyBy('id');
+        $variantMap = \App\Models\ProductVariant::whereIn('id', array_filter($variant_ids))->get()->keyBy('id');
+
+        foreach ($products as $index => $p) {
+            $qty = (float)($qtys[$index] ?? 0);
+            if ($qty <= 0) continue;
+
+            $vId = $variant_ids[$index] ?? '';
+            $vModel = $vId ? ($variantMap[$vId] ?? null) : null;
+            $variantName = $vModel ? ($vModel->size_label ?: $vModel->variant_name) : '';
+            $productModel = $productMap[$p] ?? null;
+            $displayName = $productModel ? $productModel->item_name : $p;
+            $catName = ($productModel && $productModel->category_relation) ? $productModel->category_relation->name : 'Uncategorized';
+
+            if ($variantName && $productModel) {
+                $cleanVariant = preg_replace('/\s*\([\d.]+\s*KG\)/i', '', $variantName);
+                $cleanVariant = trim(str_ireplace($productModel->item_name, '', $cleanVariant));
+                $cleanVariant = ltrim($cleanVariant, ' -');
+                if ($cleanVariant !== '') $displayName .= ' (' . $cleanVariant . ')';
+            } else if ($variantName) {
+                $displayName .= ' - ' . $variantName;
+            }
+
+            $unit = $units[$index] ?? '';
+            $price = (float)($prices[$index] ?? 0);
+
+            // Weight conversion logic
+            if ($vModel && $productModel && strtolower($productModel->unit_type ?? '') === 'kg' && $vModel->size_value > 0) {
+                $multiplier = 1;
+                $sUnit = strtolower($vModel->size_unit ?? 'kg');
+                if ($sUnit === 'kg') $multiplier = (float)$vModel->size_value;
+                elseif (in_array($sUnit, ['gm','gram','grams'])) $multiplier = (float)$vModel->size_value / 1000;
+                
+                $qty = $qty * $multiplier;
+                if ($multiplier > 0) $price = $price / $multiplier;
+                $unit = 'KG';
+            } else if (empty($unit) || is_numeric($unit)) {
+                if ($vModel && !empty($vModel->size_unit)) $unit = strtoupper($vModel->size_unit);
+                else if ($productModel && !empty($productModel->unit_type)) $unit = strtoupper($productModel->unit_type);
+                else $unit = 'PIECE';
+            }
+
+            $items[] = [
+                'item_name' => $displayName,
+                'category'  => $catName,
+                'item_code' => $codes[$index] ?? '',
+                'brand'     => $brands[$index] ?? '',
+                'unit'      => $unit,
+                'price'     => $price,
+                'discount'  => (float)($discounts[$index] ?? 0),
+                'qty'       => $qty,
+                'total'     => (float)($totals[$index] ?? 0),
+            ];
+        }
+
+        return view('admin_panel.booking.receipt', [
+            'booking'      => $booking,
+            'bookingItems' => $items,
+        ]);
     }
 
     public function create()

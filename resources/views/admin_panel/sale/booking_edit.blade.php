@@ -1,661 +1,284 @@
 @extends('admin_panel.layout.app')
 @section('content')
 <style>
-    .searchResults {
-        position: absolute;
-        z-index: 9999;
-        width: 100%;
-        max-height: 200px;
-        overflow-y: auto;
+    /* Thermal Receipt Styling for Preview */
+    .receipt-preview {
+        width: 80mm;
+        margin: 0 auto;
+        padding: 2mm 1mm;
         background: #fff;
-        /* border: 1px solid #ddd; */
-        text-align: start
+        color: #000;
+        font-family: 'Arial', sans-serif;
+        font-size: 14px;
+        line-height: 1.3;
+        font-weight: 700;
+        border: 1px solid #ddd;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        position: relative;
     }
 
-    .search-result-item.active {
-        background: #007bff;
-        color: white;
+    .receipt-preview .center { text-align: center; }
+    .receipt-preview .bold { font-weight: 900; }
+    .receipt-preview .line { border-top: 2px dashed #000; margin: 3px 0; }
+    .receipt-preview table { width: 100%; border-collapse: collapse; }
+    .receipt-preview th, .receipt-preview td { padding: 3px 0; vertical-align: top; }
+    
+    .receipt-preview .store-name { font-size: 22px; font-weight: 900; margin: 5px 0; text-transform: uppercase; }
+    .receipt-preview .store-info { font-size: 13px; margin: 2px 0; font-weight: 800; }
+    .receipt-preview .receipt-title { font-size: 18px; font-weight: 900; margin: 5px 0; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 3px 0; text-transform: uppercase; }
+
+    .receipt-preview .items-table thead th { border-top: 2px solid #000; border-bottom: 2px solid #000; font-size: 14px; text-align: left; font-weight: 900; }
+    .receipt-preview .col-amount { text-align: right; white-space: nowrap; padding-left: 5px; }
+    .receipt-preview .col-price { text-align: right; white-space: nowrap; padding-left: 5px; }
+    .receipt-preview .col-qty { text-align: right; white-space: nowrap; padding-left: 5px; }
+    .receipt-preview th, .receipt-preview td { padding: 1px 2px; }
+
+    .receipt-preview .totals-table th { text-align: left; font-weight: 800; }
+    .receipt-preview .totals-table td { text-align: right; font-weight: 900; }
+    .receipt-preview .grand-total-row th, .receipt-preview .grand-total-row td { font-weight: 900; font-size: 18px; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 3px 0; }
+
+    .receipt-preview .ribbon-wrap { position: absolute; top: 0; right: 0; width: 70px; height: 70px; overflow: hidden; z-index: 99; }
+    .receipt-preview .ribbon { position: absolute; top: 20px; right: -32px; width: 128px; text-align: center; background: #000; color: #fff; font-size: 12px; font-weight: 900; letter-spacing: 1px; padding: 5px 0; transform: rotate(45deg); }
+
+    /* Summary Dashboard Styling */
+    .summary-card {
+        border-radius: 12px;
+        padding: 20px;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
     }
-</style>
+    .summary-item { text-align: center; }
+    .summary-item h6 { font-size: 14px; color: #6c757d; text-transform: uppercase; margin-bottom: 8px; }
+    .summary-item .value { font-size: 24px; font-weight: 800; color: #212529; }
+    .summary-item.balance .value { color: #dc3545; }
+    .summary-item.paid .value { color: #198754; }
 
-<style>
-    .table-scroll tbody {
-        display: block;
-        max-height: calc(60px * 5);
-        /* Assuming each row is ~40px tall */
-        overflow-y: auto;
+    .payment-section {
+        background: #fff;
+        border-radius: 12px;
+        padding: 25px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
     }
-
-    .table-scroll thead,
-    .table-scroll tbody tr {
-        display: table;
-        width: 100%;
-        table-layout: fixed;
-    }
-
-    /* Optional: Hide scrollbar width impact */
-    .table-scroll thead {
-        width: calc(100% - 1em);
-    }
-
-    .table-scroll .icon-col {
-        width: 51px;
-        /* Ya jitni chhoti chahiye */
-        min-width: 51px;
-        max-width: 40px;
-    }
-
-    .table-scroll {
-        max-height: none !important;
-        overflow-y: visible !important;
-    }
-
-
-    .disabled-row input {
-        background-color: #f8f9fa;
-        pointer-events: none;
-    }
-
-    .sale-btn {
-        font-size: 1.5rem;
-        font-weight: 600;
-        padding: 5px 40px;
-        box-shadow: 0 0 10px rgba(0, 128, 0, 0.4);
-        transition: all 0.2s ease-in-out;
-    }
-
-    .sale-btn:hover {
-        transform: scale(1.05);
-        background-color: #28a745 !important;
-        box-shadow: 0 0 14px rgba(40, 167, 69, 0.6);
+    .confirm-btn {
+        padding: 15px;
+        font-size: 1.2rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
 </style>
 
-<div class="container-fluid">
-    <div class="card shadow-sm border-0 mt-3">
-        <div class="card-header bg-light text-dark d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Confirm Booking</h5>
-        </div>
-        <form action="{{ route('sales.store') }}" method="POST">
-            @csrf
-            @if (session('success'))
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                {{ session('success') }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            @endif
-
-            @if (session('error'))
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                {{ session('error') }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            @endif
-            <div class="card-body">
-                {{-- Top Form --}}
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold">Customer:</label>
-                        <select name="customer" class="form-control form-control-sm">
-                            <option value="Walk-in Customer">Walk-in Customer</option>
-                            @foreach ($Customer as $c)
-                            <option value="{{ $c->id }}" {{ $booking->customer == $c->id ? 'selected' : '' }}>
-                                {{ $c->customer_name }}
-                            </option>
-                            @endforeach
-                        </select>
-
-
-
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold">Reference #</label>
-                        <input type="text" name="reference" class="form-control form-control-sm"
-                            value="{{ $booking->reference }}">
-                        <input type="text" name="booking_id" value="{{ $booking->id ?? '' }}">
-
-                    </div>
+<div class="container-fluid py-4">
+    <div class="row">
+        {{-- Left: Receipt Preview --}}
+        <div class="col-lg-5 mb-4">
+            <div class="receipt-preview">
+                <div class="ribbon-wrap">
+                    <div class="ribbon">BOOKED</div>
+                </div>
+                <div class="center">
+                    <div class="store-name">Bin Sultan</div>
+                    <div class="store-info">Sweet & Bakers</div>
+                    <div class="store-info">Latifabad no 6 Hyderabad</div>
+                    <div class="receipt-title">Booking Confirmation</div>
                 </div>
 
-                {{-- Table --}}
-                <div class="table-responsive">
-                    <table class="table table-bordered table-sm align-middle text-center">
-                        <thead>
-                            <tr class="text-center">
-                                <th>product</th>
-                                <th>Item Code</th>
-                                <th>Color</th>
-
-                                <th>Brand</th>
-                                <th>Unit</th>
-                                <th>Price</th>
-                                <th>Discount</th>
-                                <th>Qty</th>
-                                <th>Total</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <style>
-                            /* Select2: make selection stay in one line and scroll horizontally */
-                            .select2-container--default .select2-selection--multiple {
-                                display: flex !important;
-                                flex-wrap: nowrap !important;
-                                overflow-x: auto !important;
-                                overflow-y: hidden !important;
-                                min-height: 38px !important;
-                                max-height: 38px !important;
-                                white-space: nowrap !important;
-                                scrollbar-width: thin;
-                            }
-
-                            /* Each tag styling */
-                            .select2-selection__choice {
-                                white-space: nowrap !important;
-                                margin-right: 3px !important;
-                                font-size: 11px;
-                                padding: 2px 5px !important;
-                            }
-
-                            /* Remove unwanted spacing */
-                            .select2-search--inline {
-                                flex: none !important;
-                            }
-                        </style>
-
-
-
-                        </style>
-                        <tbody id="purchaseItems">
-                            @foreach ($bookingItems as $item)
-                            <tr>
-                                <td>
-                                    <input type="hidden" name="product_id[]" class="product_id" value="{{ $item['product_id'] ?? '' }}">
-                                    <input type="text" class="form-control productSearch" value="{{ $item['item_name'] ?? '' }}" autocomplete="off">
-                                    <ul class="searchResults list-group mt-1"></ul>
-                                </td>
-
-                                <td class="item_code border">
-                                    <input type="text" name="item_code[]" class="form-control" value="{{ $item['item_code'] ?? '' }}" readonly>
-                                </td>
-
-                                <td class="color border">
-                                    <select class="form-control form-control-sm" name="color[]">
-                                        <option value="">Select Color</option>
-                                        @if (!empty($item['available_colors']) && is_array($item['available_colors']))
-                                        @foreach ($item['available_colors'] as $color)
-                                        <option value="{{ $color }}" {{ (isset($item['color']) && $item['color'] == $color) ? 'selected' : '' }}>
-                                            {{ $color }}
-                                        </option>
-                                        @endforeach
-                                        @endif
-                                    </select>
-                                </td>
-
-
-
-
-                                <td class="uom border">
-                                    <input type="text" name="uom[]" class="form-control" value="{{ $item['uom'] ?? '' }}" readonly>
-                                </td>
-
-                                <td class="unit border">
-                                    <input type="text" name="unit[]" class="form-control" value="{{ $item['unit'] ?? '' }}" readonly>
-                                </td>
-
-                                <td>
-                                    <input type="number" step="0.01" name="price[]" class="form-control price" value="{{ $item['price'] ?? 0 }}">
-                                </td>
-
-                                <td>
-                                    <input type="number" step="0.01" name="item_disc[]" class="form-control item_disc" value="{{ $item['discount'] ?? 0 }}">
-                                </td>
-
-                                <td class="qty">
-                                    <input type="number" name="qty[]" class="form-control quantity" value="{{ $item['qty'] ?? 1 }}" min="1">
-                                </td>
-
-                                <td class="total border">
-                                    <input type="text" name="total[]" class="form-control row-total" value="{{ $item['total'] ?? 0 }}" readonly>
-                                </td>
-
-                                <td>
-                                    <button type="button" class="btn btn-sm btn-danger remove-row">X</button>
-                                </td>
-                            </tr>
-                            @endforeach
-
-
-                            {{-- Empty row for adding more products manually --}}
-                            <tr>
-                                <td>
-                                    <input type="hidden" name="product_id[]" class="product_id">
-                                    <input type="text" class="form-control productSearch" placeholder="Enter product name..." autocomplete="off">
-                                    <ul class="searchResults list-group mt-1"></ul>
-                                </td>
-
-                                <td class="item_code border">
-                                    <input type="text" name="item_code[]" class="form-control" readonly>
-                                </td>
-
-                                <td class="color border">
-                                    <select class="form-control form-control-sm color-dropdown" name="color[]">
-                                        <option value="">Select Color</option>
-                                    </select>
-                                </td>
-                                <td class="uom border">
-                                    <input type="text" name="uom[]" class="form-control" readonly>
-                                </td>
-
-                                <td class="unit border">
-                                    <input type="text" name="unit[]" class="form-control" readonly>
-                                </td>
-
-                                <td>
-                                    <input type="number" step="0.01" name="price[]" class="form-control price">
-                                </td>
-
-                                <td>
-                                    <input type="number" step="0.01" name="item_disc[]" class="form-control item_disc">
-                                </td>
-
-                                <td class="qty">
-                                    <input type="number" name="qty[]" class="form-control quantity" min="1">
-                                </td>
-
-                                <td class="total border">
-                                    <input type="text" name="total[]" class="form-control row-total" readonly>
-                                </td>
-
-                                <td>
-                                    <button type="button" class="btn btn-sm btn-danger remove-row">X</button>
-                                </td>
-                            </tr>
-                        </tbody>
-
-
-                    </table>
-                </div>
-
-                {{-- Amount Summary --}}
-                <table class="table table-bordered table-sm mt-4 mb-0 text-center">
-                    <tr>
-                        <th>Amount In Words : </th>
-                        <th>BILL AMOUNT</th>
-                        <th>ITEM DISCOUNT</th>
-                        <th>EXTRA DISCOUNT</th>
-                        <th>NET AMOUNT</th>
-                        <th>Cash</th>
-                        <th>C/D Card</th>
-                        <th>Change</th>
-                    </tr>
-                    <tr class="align-middle">
-                        <td><input type="text" name="total_amount_Words" class="form-control form-control-sm"
-                                id="amountInWords" readonly></td>
-                        <td><input type="text" name="total_subtotal" class="form-control form-control-sm text-center"
-                                id="billAmount" readonly></td>
-                        <td><input type="text" name="total_discount" class="form-control form-control-sm text-center"
-                                id="itemDiscount" readonly></td>
-                        <td><input type="number" name="total_extra_cost"
-                                class="form-control form-control-sm text-center" id="extraDiscount" value="0">
-                        </td>
-                        <td><input type="text" name="total_net" class="form-control form-control-sm text-center"
-                                id="netAmount" readonly></td>
-                        <td>
-                            <input
-                                type="number"
-                                name="cash"
-                                id="cash"
-                                class="form-control form-control-sm text-center"
-                                value="{{ old('cash', $booking->advance_payment ?? $booking->cash ?? 0) }}"
-                                step="0.01"
-                                min="0">
-                        </td>
-
-                        <td><input type="number" name="card" class="form-control form-control-sm text-center"
-                                id="card" value="0"></td>
-                        <td><input type="text" name="change" class="form-control form-control-sm text-center"
-                                id="change" readonly></td>
-                    </tr>
-
+                <table class="meta-table" style="font-size: 12px; width: 100%;">
+                    <tr><th style="text-align:left;">Booking #</th><td>: {{ $booking->id }}</td></tr>
+                    <tr><th style="text-align:left;">Customer</th><td>: {{ $booking->customer_relation->customer_name ?? 'N/A' }}</td></tr>
+                    <tr><th style="text-align:left;">Reference</th><td>: {{ $booking->reference ?? 'N/A' }}</td></tr>
+                    <tr><th style="text-align:left;">Date</th><td>: {{ \Carbon\Carbon::parse($booking->booking_date)->format('d-M-Y') }}</td></tr>
                 </table>
 
+                <div class="line"></div>
 
-                {{-- Footer Buttons --}}
-                <div class="d-flex justify-content-between align-items-center mt-4">
-                    <div>
-                        <strong>TOTAL PIECES : </strong> <span>0</span>
-                    </div>
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th class="col-qty">Qty</th>
+                            <th class="col-amount">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($bookingItems as $item)
+                        <tr>
+                            <td>{{ $item['item_name'] }}</td>
+                            <td class="col-qty">{{ $item['qty'] }} {{ $item['unit'] }}</td>
+                            <td class="col-amount">{{ number_format($item['total'], 0) }}</td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
 
+                <div class="line"></div>
 
-                    <div class="d-flex gap-2">
-                        <button type="submit" name="action" value="sale" class="btn btn-success sale-btn">Confirm</button>
-                        <a href="{{ route('bookings.index') }}" class="btn btn-secondary">Close</a>
-                    </div>
-
-                </div>
+                <table class="totals-table">
+                    <tr>
+                        <th style="text-align:left;">Gross Amount</th>
+                        <td>{{ number_format($booking->total_bill_amount ?? 0, 0) }}</td>
+                    </tr>
+                    @if(!empty($booking->total_extradiscount) && $booking->total_extradiscount > 0)
+                    <tr>
+                        <th style="text-align:left;">Discount</th>
+                        <td>{{ number_format($booking->total_extradiscount, 0) }}</td>
+                    </tr>
+                    @endif
+                    <tr class="grand-total-row">
+                        <th>Net Amount</th>
+                        <td>{{ number_format($booking->total_net, 0) }}</td>
+                    </tr>
+                    <tr>
+                        <th style="text-align:left;">Advance Paid</th>
+                        <td style="color: #198754;">{{ number_format($booking->advance_payment ?? 0, 0) }}</td>
+                    </tr>
+                    @php
+                        $remaining = max(($booking->total_net ?? 0) - ($booking->advance_payment ?? 0), 0);
+                    @endphp
+                    <tr style="font-size: 18px;">
+                        <th>Remaining</th>
+                        <td style="color: #dc3545;">{{ number_format($remaining, 0) }}</td>
+                    </tr>
+                </table>
             </div>
+        </div>
+
+        {{-- Right: Confirmation Form --}}
+        <div class="col-lg-7">
+            <div class="payment-section">
+                <h4 class="mb-4 fw-bold text-dark border-bottom pb-2">Final Settlement</h4>
+                
+                <form action="{{ route('sales.store') }}" method="POST" id="confirmForm">
+                    @csrf
+                    <input type="hidden" name="booking_id" value="{{ $booking->id }}">
+                    <input type="hidden" name="customer" value="{{ $booking->customer }}">
+                    <input type="hidden" name="reference" value="{{ $booking->reference }}">
+                    
+                    {{-- Re-pass item data for store logic --}}
+                    @foreach($bookingItems as $index => $item)
+                        <input type="hidden" name="product_id[]" value="{{ $item['product_id'] }}">
+                        <input type="hidden" name="product_name[]" value="{{ $item['item_name'] }}">
+                        <input type="hidden" name="item_code[]" value="{{ $item['item_code'] }}">
+                        <input type="hidden" name="uom[]" value="{{ $item['uom'] }}">
+                        <input type="hidden" name="unit[]" value="{{ $item['unit'] }}">
+                        <input type="hidden" name="price[]" value="{{ $item['price'] }}">
+                        <input type="hidden" name="item_disc[]" value="{{ $item['discount'] }}">
+                        <input type="hidden" name="qty[]" value="{{ $item['qty'] }}">
+                        <input type="hidden" name="total[]" value="{{ $item['total'] }}">
+                        <input type="hidden" name="color[]" value="{{ json_encode($item['available_colors']) }}">
+                    @endforeach
+
+                    <input type="hidden" name="total_subtotal" value="{{ $booking->total_bill_amount }}">
+                    <input type="hidden" name="total_extra_cost" value="{{ $booking->total_extradiscount }}">
+                    <input type="hidden" name="total_net" value="{{ $booking->total_net }}">
+
+                    <div class="summary-card mb-4">
+                        <div class="row">
+                            <div class="col-4 summary-item">
+                                <h6>Total Bill</h6>
+                                <div class="value">Rs. {{ number_format($booking->total_net, 0) }}</div>
+                            </div>
+                            <div class="col-4 summary-item paid border-start border-end">
+                                <h6>Advance Paid</h6>
+                                <div class="value">Rs. {{ number_format($booking->advance_payment ?? 0, 0) }}</div>
+                            </div>
+                            <div class="col-4 summary-item balance">
+                                <h6>Remaining</h6>
+                                <div class="value" id="balanceDisplay">Rs. {{ number_format($remaining, 0) }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Cash Received</label>
+                            <div class="input-group input-group-lg shadow-sm">
+                                <span class="input-group-text bg-success text-white">Rs.</span>
+                                <input type="number" name="cash" id="cashInput" 
+                                       class="form-control fw-bold text-success" 
+                                       placeholder="0" step="0.01" 
+                                       value="{{ $remaining }}"
+                                       autofocus>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Card Payment</label>
+                            <div class="input-group input-group-lg shadow-sm">
+                                <span class="input-group-text bg-primary text-white">Rs.</span>
+                                <input type="number" name="card" id="cardInput" 
+                                       class="form-control fw-bold text-primary" 
+                                       placeholder="0" step="0.01" value="0">
+                            </div>
+                        </div>
+                        
+                        <div class="col-12 mt-4">
+                            <div class="alert alert-info d-flex justify-content-between align-items-center">
+                                <span class="fw-bold">Change to Return:</span>
+                                <span class="fs-4 fw-black" id="changeDisplay">Rs. 0.00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-grid gap-2">
+                        <button type="submit" name="action" value="sale" class="btn btn-success confirm-btn">
+                            <i class="fas fa-check-circle me-2"></i> Confirm & Print Sale Receipt
+                        </button>
+                        <a href="{{ route('bookings.index') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i> Cancel & Back
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
-    </form>
 </div>
-</div>
-@endsection
-
-@section('scripts')
-<script>
-    $(document).ready(function() {
-        function num(n) {
-            return isNaN(parseFloat(n)) ? 0 : parseFloat(n);
-        }
-
-        function numberToWords(num) {
-            const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
-                "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen",
-                "Eighteen", "Nineteen"
-            ];
-            const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-            if ((num = num.toString()).length > 9) return "Overflow";
-            const n = ("000000000" + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{3})$/);
-            if (!n) return;
-            let str = "";
-            str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + " " + a[n[1][1]]) + " Crore " : "";
-            str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + " " + a[n[2][1]]) + " Lakh " : "";
-            str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + " " + a[n[3][1]]) + " Thousand " : "";
-            str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + " " + a[n[4][1]]) + " " : "";
-            return str.trim() + " Rupees Only";
-        }
-
-        function recalcRow($row) {
-            const qty = num($row.find('.quantity').val());
-            const price = num($row.find('.price').val());
-            const disc = num($row.find('.item_disc').val());
-            let total = (qty * price) - disc;
-            if (total < 0) total = 0;
-            $row.find('.row-total').val(total.toFixed(2));
-        }
-
-        function recalcSummary() {
-            let billAmount = 0;
-            let itemDiscount = 0;
-            let totalQty = 0;
-
-            $('#purchaseItems tr').each(function() {
-                const rowTotal = num($(this).find('.row-total').val());
-                const disc = num($(this).find('.item_disc').val());
-                const qty = num($(this).find('.quantity').val());
-
-                billAmount += rowTotal;
-                itemDiscount += disc;
-                totalQty += qty;
-            });
-
-            const extraDiscount = num($('#extraDiscount').val());
-            const cash = num($('#cash').val());
-            const card = num($('#card').val());
-
-            const net = billAmount - itemDiscount - extraDiscount;
-            const change = (cash + card) - net;
-
-            $('#billAmount').val(billAmount.toFixed(2));
-            $('#itemDiscount').val(itemDiscount.toFixed(2));
-            $('#netAmount').val(net.toFixed(2));
-            $('#change').val(change.toFixed(2));
-            $('#amountInWords').val(numberToWords(Math.round(net)));
-
-            $('strong:contains("TOTAL PIECES")').next().text(totalQty);
-        }
-
-        // Events
-        $(document).on('input', '.quantity, .price, .item_disc, #extraDiscount, #cash, #card', function() {
-            const $row = $(this).closest('tr');
-            if ($row.length) {
-                recalcRow($row);
-            }
-            recalcSummary();
-        });
-
-        // Initialize
-        $('#purchaseItems tr').each(function() {
-            recalcRow($(this));
-        });
-        recalcSummary();
-    });
-</script>
 
 <script>
-    $(document).ready(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        const cashInput = document.getElementById('cashInput');
+        const cardInput = document.getElementById('cardInput');
+        const changeDisplay = document.getElementById('changeDisplay');
+        const netAmount = parseFloat("{{ $booking->total_net }}") || 0;
+        const advancePaid = parseFloat("{{ $booking->advance_payment ?? 0 }}") || 0;
+        const remaining = netAmount - advancePaid;
 
-        // ---------- Helper Functions ----------
-        function num(n) {
-            return isNaN(parseFloat(n)) ? 0 : parseFloat(n);
-        }
-
-        function recalcRow($row) {
-            const qty = num($row.find('.quantity').val());
-            const price = num($row.find('.price').val());
-            const disc = num($row.find('.item_disc').val());
-            let total = (qty * price) - disc;
-            if (total < 0) total = 0;
-            $row.find('.row-total').val(total.toFixed(2));
-        }
-
-        function recalcSummary() {
-            let sub = 0;
-            $('#purchaseItems .row-total').each(function() {
-                sub += num($(this).val());
-            });
-            $('#subtotal').val(sub.toFixed(2));
-
-            const oDisc = num($('#overallDiscount').val());
-            const xCost = num($('#extraCost').val());
-            const net = (sub - oDisc + xCost);
-            $('#netAmount').val(net.toFixed(2));
-        }
-
-        function appendBlankRow() {
-            const newRow = `
-<tr>
-    <td>
-        <input type="hidden" name="product_id[]" class="product_id">
-        <input type="text" class="form-control productSearch" placeholder="Enter product name..." autocomplete="off">
-        <ul class="searchResults list-group mt-1"></ul>
-    </td>
-    <td class="item_code border"><input type="text" name="item_code[]" class="form-control" readonly></td>
-          <td class="color border">
-    <select class="form-control form-control color-dropdown" name="color[]">
-        <option value="">Select Color</option>
-    </select>
-</td>
-    <td class="uom border"><input type="text" name="uom[]" class="form-control" readonly></td>
-    <td class="unit border"><input type="text" name="unit[]" class="form-control" readonly></td>
-    <td><input type="number" step="0.01" name="price[]" class="form-control price" value="1" ></td>
-    <td><input type="number" step="0.01" name="item_disc[]" class="form-control item_disc" value=""></td>
-    <td class="qty"><input type="number" name="qty[]" class="form-control quantity" value="" min="1"></td>
-    <td class="total border"><input type="text" name="total[]" class="form-control row-total" readonly></td>
-    <td><button type="button" class="btn btn-sm btn-danger remove-row">X</button></td>
-</tr>`;
-            $('#purchaseItems').append(newRow);
-        }
-
-        // ---------- Product Search ----------
-        $(document).on('keyup', '.productSearch', function(e) {
-            const $input = $(this);
-            const q = $input.val().trim();
-            const $row = $input.closest('tr');
-            const $box = $row.find('.searchResults');
-
-            if (q.length === 0) {
-                $box.empty();
-                return;
+        function updateChange() {
+            const cash = parseFloat(cashInput.value) || 0;
+            const card = parseFloat(cardInput.value) || 0;
+            const totalReceived = cash + card;
+            
+            // Note: In confirmation, the "total net" for the new sale should be the full amount?
+            // Or just the remaining? 
+            // In the store logic, it creates a new Sale. If we want it to reflect the full transaction, 
+            // we should store the full net amount.
+            
+            const change = totalReceived - remaining;
+            changeDisplay.innerText = "Rs. " + change.toLocaleString(undefined, {minimumFractionDigits: 2});
+            
+            if (change < 0) {
+                changeDisplay.classList.add('text-danger');
+                changeDisplay.classList.remove('text-success');
+            } else {
+                changeDisplay.classList.add('text-success');
+                changeDisplay.classList.remove('text-danger');
             }
+        }
 
-            // Keyboard Navigation
-            const isNavKey = ['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key);
-            if (isNavKey && $box.children('.search-result-item').length) {
-                const $items = $box.children('.search-result-item');
-                let idx = $items.index($items.filter('.active'));
-                if (e.key === 'ArrowDown') {
-                    idx = (idx + 1) % $items.length;
-                    $items.removeClass('active');
-                    $items.eq(idx).addClass('active');
+        cashInput.addEventListener('input', updateChange);
+        cardInput.addEventListener('input', updateChange);
+        
+        // Form validation
+        document.getElementById('confirmForm').addEventListener('submit', function(e) {
+            const cash = parseFloat(cashInput.value) || 0;
+            const card = parseFloat(cardInput.value) || 0;
+            if ((cash + card) < remaining) {
+                if (!confirm('Received amount is less than remaining balance. Proceed?')) {
                     e.preventDefault();
-                    return;
                 }
-                if (e.key === 'ArrowUp') {
-                    idx = (idx <= 0 ? $items.length - 1 : idx - 1);
-                    $items.removeClass('active');
-                    $items.eq(idx).addClass('active');
-                    e.preventDefault();
-                    return;
-                }
-                if (e.key === 'Enter') {
-                    if (idx >= 0) {
-                        $items.eq(idx).trigger('click');
-                    } else if ($items.length === 1) {
-                        $items.eq(0).trigger('click');
-                    }
-                    e.preventDefault();
-                    return;
-                }
-            }
-
-            // AJAX call to search
-            $.ajax({
-                url: "{{ route('search-product-name') }}",
-                type: 'GET',
-                data: {
-                    q
-                },
-                success: function(data) {
-                    let html = '';
-                    (data || []).forEach(p => {
-                        const brand = (p.brand && p.brand.name) ? p.brand.name : '';
-                        const unit = (p.unit_id ?? '');
-                        const price = (p.wholesale_price ?? 0);
-                        const code = (p.item_code ?? '');
-                        const name = (p.item_name ?? '');
-                        const id = (p.id ?? '');
-                        const colors = p.color ? p.color : '[]';
-
-                        html += `
-<li class="list-group-item search-result-item"
-    tabindex="0"
-    data-product-id="${id}"
-    data-product-name="${name}"
-    data-product-uom="${brand}"
-    data-product-unit="${unit}"
-    data-product-code="${code}"
-    data-price="${price}"
-    data-colors='${colors}'>
-  ${name} - ${code} - Rs. ${price}
-</li>`;
-                    });
-                    $box.html(html);
-                    $box.children('.search-result-item').first().addClass('active');
-                },
-                error: function() {
-                    $box.empty();
-                }
-            });
-        });
-
-        // On Click Product Suggestion
-        $(document).on('click', '.search-result-item', function() {
-            const $li = $(this);
-            const $row = $li.closest('tr');
-
-            $row.find('.productSearch').val($li.data('product-name'));
-            $row.find('.item_code input').val($li.data('product-code'));
-            $row.find('.uom input').val($li.data('product-uom'));
-            $row.find('.unit input').val($li.data('product-unit'));
-            $row.find('.price').val($li.data('price'));
-            $row.find('.product_id').val($li.data('product-id'));
-
-            $row.find('.quantity').val(1);
-            $row.find('.item_disc').val(0);
-
-            // Handle Color Select2
-            // Handle Color Select2
-            const colors = JSON.parse($li.attr('data-colors') || '[]');
-            const $colorSelect = $row.find('.color-dropdown');
-
-            $colorSelect.empty(); // remove old options
-            $colorSelect.append('<option value="">Select Color</option>'); // default
-
-            colors.forEach(color => {
-                const option = $('<option>', {
-                    value: color,
-                    text: color
-                });
-                $colorSelect.append(option);
-            });
-
-            $colorSelect.trigger('change.select2');
-
-            recalcRow($row);
-            recalcSummary();
-
-            $row.find('.searchResults').empty();
-
-            appendBlankRow();
-            $('#purchaseItems tr:last .productSearch').focus();
-        });
-
-        // Keyboard Enter on suggestion
-        $(document).on('keydown', '.searchResults .search-result-item', function(e) {
-            if (e.key === 'Enter') {
-                $(this).trigger('click');
             }
         });
 
-        // Quantity/Price/Disc Update
-        $('#purchaseItems').on('input', '.quantity, .price, .item_disc', function() {
-            const $row = $(this).closest('tr');
-            recalcRow($row);
-            recalcSummary();
-        });
-
-        // Remove row
-        $('#purchaseItems').on('click', '.remove-row', function() {
-            $(this).closest('tr').remove();
-            recalcSummary();
-        });
-
-        // Discount/Extra Cost Update
-        $('#overallDiscount, #extraCost').on('input', function() {
-            recalcSummary();
-        });
-
-        // Initialize first row
-        recalcRow($('#purchaseItems tr:first'));
-        recalcSummary();
-
-        // Select2 Color Init on focus
-        // Select2 Color Init on focus
-        $(document).ready(function() {
-            // 1️⃣ Page load par saare color select2 initialize karo
-            $('.select2-color').each(function() {
-                $(this).select2({
-                    placeholder: "Select Color",
-                    tags: true,
-                    width: '100%'
-                });
-            });
-
-            // 2️⃣ Jab naye row aaye to tab bhi initialize karo
-            $('#purchaseItems').on('focus', '.select2-color', function() {
-                if (!$(this).hasClass("select2-hidden-accessible")) {
-                    $(this).select2({
-                        placeholder: "Select Color",
-                        tags: true,
-                        width: '100%'
-                    });
-                }
-            });
-        });
-
-
+        updateChange();
     });
 </script>
-
 @endsection

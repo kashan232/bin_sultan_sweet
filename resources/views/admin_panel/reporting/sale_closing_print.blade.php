@@ -76,7 +76,7 @@
 
     <div class="footer">
         <p>*** Bin Sultan Sweets ***</p>
-        <p>Develop By: ProWave Technologies</p>
+        <p style="font-size: 11px; font-weight: normal; margin: 2px 0;">Develop By: ProWave Software Solutions</p>
     </div>
 
     <script>

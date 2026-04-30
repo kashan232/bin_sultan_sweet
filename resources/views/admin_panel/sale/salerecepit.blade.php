@@ -113,9 +113,7 @@
         <tr><th>Change</th><td>{{ number_format($sale->change, 0) }}</td></tr>
     </table>
 
-    <div class="line"></div>
-    <p><strong>Amount In Words:</strong><br>
-    Rupees {{ $sale->total_amount_Words  }}</p>
+
 
     <!-- Footer -->
     <div class="footer">

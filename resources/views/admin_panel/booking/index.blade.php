@@ -6,7 +6,6 @@
         <div class="card-header bg-light text-dark d-flex justify-content-between align-items-center">
             <h5 class="mb-0">BOOKINGS</h5>
             <span class="fw-bold text-dark">
-                <a href="{{ route('bookings.create') }}" class="btn btn-primary">Add Booking</a>
                 <a href="{{ url()->previous() }}" class="btn btn-danger btn-sm  text-center">
                     Back
                 </a>
@@ -36,10 +35,10 @@
                     @php
                     // safe numeric values
                     $totalNet = floatval($booking->total_net ?? 0);
-                    // prefer explicit advance_payment, fallback to cash (some records used cash)
-                    $advance = floatval($booking->advance_payment ?? $booking->cash ?? 0);
-                    // remaining amount (could be negative if advance > total)
-                    $remaining = $totalNet - $advance;
+                    // Total paid is sum of advance, final cash and final card
+                    $paid = floatval($booking->advance_payment ?? 0) + floatval($booking->cash ?? 0) + floatval($booking->card ?? 0);
+                    // remaining amount
+                    $remaining = $totalNet - $paid;
                     @endphp
                     <tr>
                         <td>{{ $booking->id }}</td>
@@ -86,8 +85,8 @@
                         {{-- Total --}}
                         <td>{{ number_format($totalNet, 2) }}</td>
 
-                        {{-- Advance (new column) --}}
-                        <td>{{ number_format($advance, 2) }}</td>
+                        {{-- Paid (new column) --}}
+                        <td>{{ number_format($paid, 2) }}</td>
 
                         {{-- Remaining (new column) --}}
                         <td>

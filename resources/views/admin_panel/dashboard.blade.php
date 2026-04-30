@@ -89,7 +89,7 @@
                     <div class="welcome-divider"></div>
 
                     <p class="welcome-footer">
-                        Developed by <strong>ProWave Technologies</strong>
+                        Developed by <strong>ProWave Software Solutions</strong>
                     </p>
 
                 </div>

@@ -1,613 +1,422 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
-    <meta charset="utf-8">
-    <title>Booking Receipt #{{ $booking->id }}</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BOOKING RECEIPT - {{ $booking->id }}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap');
 
-    <style>
-        /* ===== RESET ===== */
-        * {
-            box-sizing: border-box
-        }
+    * {
+      box-sizing: border-box;
+    }
 
-        html,
-        body {
-            margin: 0;
-            padding: 0;
-            background: #fff;
-            color: #000;
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 12px;
-            line-height: 1.25;
-            font-weight: 500;
-        }
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #000;
+      font-family: 'Arial', sans-serif;
+      font-size: 14px;
+      line-height: 1.3;
+      font-weight: 700;
+    }
 
-        /* ===== CONTAINER ===== */
-        .receipt-container {
-            width: 100%;
-            max-width: 80mm;
-            margin: auto;
-            position: relative;
-            padding: 3mm 5mm 6mm;
-        }
+    /* Action Buttons - Hidden in Print */
+    .actions {
+      max-width: 80mm;
+      margin: 10px auto;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      padding: 10px;
+      background: #f0f0f0;
+      border-radius: 8px;
+    }
 
-        /* ===== CORNER RIBBON (THERMAL SAFE) ===== */
-        /* ===== ROTATED CORNER RIBBON (THERMAL SAFE) ===== */
-        .ribbon-wrap {
-            position: absolute;
-            top: -2mm;
-            right: 0;
-            width: 70px;
-            height: 70px;
-            overflow: hidden;
-            z-index: 99;
-        }
+    .btn {
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      border: 2px solid #000;
+      background: #fff;
+      border-radius: 4px;
+    }
 
-        .ribbon {
-            position: absolute;
-            top: 20px;
-            right: -32px;
-            width: 128px;
-            text-align: center;
-            background: #000;
-            color: #fff;
-            font-size: 12px;
-            font-weight: 900;
-            letter-spacing: 1px;
-            padding: 5px 0;
-            transform: rotate(45deg);
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-        }
+    .btn:hover {
+      background: #eee;
+    }
 
-        /* print safety */
-        @media print {
-            .ribbon {
-                background: #000 !important;
-                color: #fff !important;
-            }
-        }
+    /* Receipt Container */
+    .receipt-container {
+      width: 80mm;
+      margin: 0 auto;
+      padding: 5mm 2mm;
+      background: #fff;
+      position: relative;
+    }
 
+    .center {
+      text-align: center;
+    }
 
+    .bold {
+      font-weight: 900;
+    }
 
+    .line {
+      border-top: 2px dashed #000;
+      margin: 6px 0;
+    }
 
-        /* ===== COMMON ===== */
-        .center {
-            text-align: center
-        }
+    .double-line {
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+      height: 4px;
+      margin: 6px 0;
+    }
 
-        .bold {
-            font-weight: 700
-        }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
 
-        .line {
-            border-top: 1px dashed #000;
-            margin: 6px 0
-        }
+    th, td {
+      padding: 3px 0;
+      vertical-align: top;
+      color: #000 !important;
+    }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            table-layout: fixed;
-        }
+    /* Header Section */
+    .store-name {
+      font-size: 22px;
+      font-weight: 900;
+      margin: 5px 0;
+      text-transform: uppercase;
+    }
 
-        th,
-        td {
-            padding: 2px 0;
-            font-size: 11px;
-        }
+    .store-info {
+      font-size: 13px;
+      margin: 2px 0;
+      font-weight: 800;
+    }
 
-        th {
-            text-align: left;
-            font-weight: 700
-        }
+    .receipt-title {
+      font-size: 18px;
+      font-weight: 900;
+      margin: 10px 0;
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+      padding: 5px 0;
+      text-transform: uppercase;
+    }
 
-        td:last-child,
-        th:last-child {
-            text-align: right
-        }
+    .copy-label {
+      font-size: 16px;
+      font-weight: 900;
+      text-decoration: underline;
+      margin-bottom: 10px;
+      display: block;
+    }
 
-        /* ===== HEADER ===== */
-        .title {
-            margin: 0;
-            font-size: 16px;
-            font-weight: 800;
-            letter-spacing: .5px;
-        }
+    /* Metadata Table */
+    .meta-table th {
+      text-align: left;
+      font-weight: 900;
+      width: 45%;
+    }
 
-        .subtitle {
-            margin: 0;
-            font-size: 12px;
-            font-weight: 700;
-        }
+    .meta-table td {
+      text-align: left;
+      font-weight: 800;
+    }
 
-        /* ===== ITEMS TABLE ===== */
-        .items col:nth-child(1) {
-            width: 38%
-        }
+    /* Items Table */
+    .items-table thead th {
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+      font-size: 14px;
+      text-align: left;
+      font-weight: 900;
+    }
 
-        .items col:nth-child(2) {
-            width: 12%
-        }
+    .items-table .col-amount { text-align: right; white-space: nowrap; padding-left: 5px; }
+    .items-table .col-price { text-align: right; white-space: nowrap; padding-left: 5px; }
+    .items-table .col-qty { text-align: right; white-space: nowrap; padding-left: 5px; }
+    .items-table th, .items-table td { padding: 3px 2px; }
 
-        .items col:nth-child(3) {
-            width: 20%
-        }
+    .item-row td {
+      font-size: 14px;
+      padding-top: 5px;
+    }
 
-        .items col:nth-child(4) {
-            width: 30%
-        }
+    /* Totals Section */
+    .totals-table th {
+      text-align: left;
+      font-weight: 800;
+    }
 
-        .items thead th {
-            font-weight: 800;
-            font-size: 11px;
-        }
+    .totals-table td {
+      text-align: right;
+      font-weight: 900;
+    }
 
-        .items {
-            width: 100%;
-            border-collapse: collapse;
-            table-layout: fixed;
-        }
+    .totals-table .grand-total-row th,
+    .totals-table .grand-total-row td {
+      font-weight: 900;
+      font-size: 18px;
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+      padding: 6px 0;
+    }
 
-        .items th,
-        .items td {
-            padding: 3px 2px;
-            font-size: 11px;
-            vertical-align: top;
-        }
+    .footer {
+      margin-top: 15px;
+      font-size: 13px;
+      font-weight: 800;
+    }
 
-        /* column widths */
-        .items .col-item {
-            width: 38%;
-            word-break: break-word;
-            white-space: normal;
-        }
+    @media print {
+      .actions {
+        display: none !important;
+      }
 
-        .items .col-qty {
-            width: 10%;
-            text-align: center;
-        }
+      @page {
+        size: 80mm auto;
+        margin: 0;
+      }
 
-        .total-items-row th,
-        .total-items-row td {
-            font-weight: 800;
-            border-bottom: 1px dashed #000;
-            padding-bottom: 6px;
-        }
+      body {
+        margin: 0;
+        -webkit-print-color-adjust: exact;
+      }
 
-        .items .col-unit {
-            width: 10%;
-            text-align: center;
-        }
+      .receipt-container {
+        width: 100%;
+        padding: 2mm;
+      }
+    }
 
-        .items .col-price {
-            width: 20%;
-            text-align: right;
-        }
+    .page-break {
+      page-break-after: always;
+    }
 
-        .items .col-amount {
-            width: 22%;
-            text-align: right;
-            font-weight: 700;
-        }
+    /* Ribbon */
+    .ribbon-wrap {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 70px;
+      height: 70px;
+      overflow: hidden;
+      z-index: 99;
+    }
 
-        /* ===== FOOTER ===== */
-        .footer {
-            text-align: center;
-            font-size: 11px;
-            margin-top: 8px;
-            border-top: 1px dashed #000;
-            padding-top: 6px;
-            font-weight: 600;
-        }
-
-        /* ===== PRINT ===== */
-        @media print {
-            @page {
-                size: 80mm auto;
-                margin: 2mm;
-                /* 🔥 pehle 5mm tha */
-            }
-
-            .receipt-container {
-                padding-top: 1mm !important;
-                /* 🔥 extra gap kill */
-            }
-
-            body {
-                margin: 0
-            }
-        }
-
-        .copy-label {
-            text-align: center;
-            font-weight: 800;
-            font-size: 12px;
-            margin-bottom: 4px;
-            text-transform: uppercase;
-        }
-
-        .page-break {
-            page-break-after: always;
-        }
-    </style>
+    .ribbon {
+      position: absolute;
+      top: 20px;
+      right: -32px;
+      width: 128px;
+      text-align: center;
+      background: #000;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      padding: 5px 0;
+      transform: rotate(45deg);
+    }
+  </style>
 </head>
 
 <body>
 
-    <div class="receipt-container">
-        <div class="receipt-container">
-            <div class="ribbon-wrap">
-                <div class="ribbon">BOOKED</div>
-            </div>
-            <!-- ===== HEADER ===== -->
-            <div class="center">
-                <h2 class="title">Bin Sultan</h2>
-                <p class="subtitle">Sweet & Bakers</p>
-                <p style="margin:0">Latifabad no 6 Near Shadman Hall  Hyderabad</p>
-                <p style="margin:0">Phone: 022786661</p>
-            </div>
+  <div class="actions">
+    <button class="btn" id="btnBack" type="button">BACK</button>
+    <button class="btn" id="btnPrint" type="button">PRINT</button>
+  </div>
 
-            <div class="line"></div>
-            <div class="center bold" style="font-size:13px">BOOKING RECEIPT</div>
-            <div class="line"></div>
+  @php
+    $copies = ['Customer Copy', 'Bakery Copy'];
+  @endphp
 
-            <!-- ===== DETAILS ===== -->
-            <table>
-                <tr>
-                    <th>Customer</th>
-                    <td>{{ $booking->customer_relation->customer_name ?? 'N/A' }}</td>
-                </tr>
-                <tr>
-                    <th>Reference</th>
-                    <td>{{ $booking->reference ?? 'N/A' }}</td>
-                </tr>
-                <tr>
-                    <th>Print Time</th>
-                    <td>{{ \Carbon\Carbon::now()->format('d-m-Y H:i:s') }}</td>
-                </tr>
-            </table>
-
-            <div class="line"></div>
-
-            <!-- ===== ITEMS ===== -->
-            <table class="items">
-                <colgroup>
-                    <col style="width:48%">
-                    <col style="width:10%">
-                    <col style="width:20%">
-                    <col style="width:20%">
-                </colgroup>
-                <thead>
-                    <tr>
-                        <th class="col-item">Item</th>
-                        <th class="col-qty">Qty</th>
-                        <th class="col-price">Price</th>
-                        <th class="col-amount">Total</th>
-                    </tr>
-                </thead>
-
-
-                <tbody>
-                    @php
-                    $products = explode(',', $booking->product);
-                    $qtys = explode(',', $booking->qty);
-                    $prices = explode(',', $booking->per_price);
-                    $totals = explode(',', $booking->per_total);
-                    @endphp
-
-                    @foreach($products as $i => $pid)
-                    @php $prod = \App\Models\Product::find($pid); @endphp
-                    <tr>
-                        <td class="col-item">{{ $prod->item_name ?? 'N/A' }}</td>
-
-                        <td class="col-qty">
-                            {{ $qtys[$i] ?? 1 }}
-                        </td>
-
-                        <!-- ✅ UOM with SAFE CONDITION -->
-                        <td class="col-price">
-                            {{ number_format($prices[$i] ?? 0, 0) }}
-                        </td>
-
-                        <td class="bold col-amount">
-                            {{ number_format($totals[$i] ?? 0, 0) }}
-                        </td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
-
-            <div class="line"></div>
-
-            <!-- ===== TOTALS ===== -->
-            <table>
-                @php
-                $units = [
-                'Pc' => $booking->total_pieces,
-                'Mtr' => $booking->total_meter,
-                'Yd' => $booking->total_yard,
-                ];
-                @endphp
-                @foreach($units as $label => $value)
-                @if(!empty($value) && $value > 0)
-                <tr class="total-units-row total-items-row">
-                    <th>{{ $label }}</th>
-                    <td>{{ $value }}</td>
-                </tr>
-                @endif
-                @endforeach
-
-                <tr>
-                    <th>Sale Type</th>
-                    <td>{{ strtoupper($booking->sale_type ?? 'BOOKING') }}</td>
-                </tr>
-                <tr>
-                    <th>Total Amount</th>
-                    <td class="bold">{{ number_format($booking->total_net,0) }}</td>
-                </tr>
-
-                <tr>
-                    <th>Advance Paid</th>
-                    <td class="bold">
-                        {{ number_format($booking->advance_payment ?? 0,0) }}
-                    </td>
-                </tr>
-
-                @php
-                $remaining = max(
-                ($booking->total_net ?? 0) - ($booking->advance_payment ?? 0),
-                0
-                );
-                @endphp
-
-                <tr>
-                    <th>Remaining Amount</th>
-                    <td class="bold">{{ number_format($remaining,0) }}</td>
-                </tr>
-            </table>
-
-            <div class="line"></div>
-
-            <p class="bold" style="margin:0 0 4px">Amount In Words:</p>
-            <p id="amountInWords" style="margin:0">Loading...</p>
-
-            <!-- ===== FOOTER ===== -->
-            <div class="footer">
-                <p>Please check bakery items at the time of purchase</p>
-                <p>Bakery & sweets items are non-returnable</p>
-                <p>Developed By: ProWave Technologies</p>
-                <p>+92 317 3836 223 | +92 317 3859 647</p>
-                <p>*** Thank you for the visit ***</p>
-            </div>
-
-        </div>
-
+  @foreach($copies as $copy)
+  <div class="receipt-container {{ !$loop->last ? 'page-break' : '' }}">
+    <div class="ribbon-wrap">
+        <div class="ribbon">BOOKED</div>
+    </div>
+    <!-- Header -->
+    <div class="center">
+      <div class="store-name">Bin Sultan</div>
+      <div class="store-info">Sweet & Bakers</div>
+      <div class="store-info">Latifabad no 6 Near Shadman Hall Hyderabad</div>
+      <div class="store-info">Phone: 022-786661</div>
+      
+      <div class="receipt-title">Booking Receipt</div>
+      <span class="copy-label">{{ $copy }}</span>
     </div>
 
-    <div class="page-break"></div>
+    <!-- Metadata -->
+    <table class="meta-table">
+      <tr>
+        <th>Booking #</th>
+        <td>: {{ $booking->id }}</td>
+      </tr>
+      <tr>
+        <th>Customer</th>
+        <td>: {{ $booking->customer_relation->customer_name ?? 'N/A' }}</td>
+      </tr>
+      <tr>
+        <th>Reference</th>
+        <td>: {{ $booking->reference ?? 'N/A' }}</td>
+      </tr>
+      <tr>
+        <th>Date</th>
+        <td>: {{ \Carbon\Carbon::parse($booking->booking_date)->format('D, d-M-Y h:i A') }}</td>
+      </tr>
+    </table>
 
-    <div class="receipt-container">
-        <div class="receipt-container">
-            <div class="ribbon-wrap">
-                <div class="ribbon">BOOKED</div>
-            </div>
-            <!-- ===== HEADER ===== -->
-            <div class="center">
-                <h2 class="title">Bin Sultan</h2>
-                <p class="subtitle">Sweet & Bakers</p>
-                <p style="margin:0">Latifabad no 6 Near Shadman Hall  Hyderabad</p>
-                <p style="margin:0">Phone: 022786661</p>
-            </div>
+    <div style="margin-top:10px;"></div>
 
-            <div class="line"></div>
-            <div class="center bold" style="font-size:13px">BOOKING RECEIPT</div>
-            <div class="line"></div>
+    <!-- Items Table -->
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="width: 40%;">Item Name</th>
+          <th class="col-price" style="width: 20%;">Price</th>
+          <th class="col-qty" style="width: 20%;">Qty/Wt</th>
+          <th class="col-amount" style="width: 20%;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        @php
+          $totalQty = 0;
+          $totalItemsCount = count($bookingItems);
+        @endphp
 
-            <!-- ===== DETAILS ===== -->
-            <table>
-                <tr>
-                    <th>Customer</th>
-                    <td>{{ $booking->customer_relation->customer_name ?? 'N/A' }}</td>
-                </tr>
-                <tr>
-                    <th>Reference</th>
-                    <td>{{ $booking->reference ?? 'N/A' }}</td>
-                </tr>
-                <tr>
-                    <th>Print Time</th>
-                    <td>{{ \Carbon\Carbon::now()->format('d-m-Y H:i:s') }}</td>
-                </tr>
-            </table>
-
-            <div class="line"></div>
-
-            <!-- ===== ITEMS ===== -->
-            <table class="items">
-                <colgroup>
-                    <col style="width:48%">
-                    <col style="width:10%">
-                    <col style="width:20%">
-                    <col style="width:20%">
-                </colgroup>
-                <thead>
-                    <tr>
-                        <th class="col-item">Item</th>
-                        <th class="col-qty">Qty</th>
-                        <th class="col-price">Price</th>
-                        <th class="col-amount">Total</th>
-                    </tr>
-                </thead>
-
-
-                <tbody>
-                    @php
-                    $products = explode(',', $booking->product);
-                    $qtys = explode(',', $booking->qty);
-                    $prices = explode(',', $booking->per_price);
-                    $totals = explode(',', $booking->per_total);
-                    @endphp
-
-                    @foreach($products as $i => $pid)
-                    @php $prod = \App\Models\Product::find($pid); @endphp
-                    <tr>
-                        <td class="col-item">{{ $prod->item_name ?? 'N/A' }}</td>
-
-                        <td class="col-qty">
-                            {{ $qtys[$i] ?? 1 }}
-                        </td>
-                       
-
-                        <td class="col-price">
-                            {{ number_format($prices[$i] ?? 0, 0) }}
-                        </td>
-
-                        <td class="bold col-amount">
-                            {{ number_format($totals[$i] ?? 0, 0) }}
-                        </td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
-
-            <div class="line"></div>
-
-            <!-- ===== TOTALS ===== -->
-            <table>
-                @php
-                $units = [
-                'Pc' => $booking->total_pieces,
-                'Mtr' => $booking->total_meter,
-                'Yd' => $booking->total_yard,
-                ];
-                @endphp
-                @foreach($units as $label => $value)
-                @if(!empty($value) && $value > 0)
-                <tr class="total-units-row total-items-row">
-                    <th>{{ $label }}</th>
-                    <td>{{ $value }}</td>
-                </tr>
-                @endif
-                @endforeach
-
-                <tr>
-                    <th>Sale Type</th>
-                    <td>{{ strtoupper($booking->sale_type ?? 'BOOKING') }}</td>
-                </tr>
-                <tr>
-                    <th>Total Amount</th>
-                    <td class="bold">{{ number_format($booking->total_net,0) }}</td>
-                </tr>
-
-                <tr>
-                    <th>Advance Paid</th>
-                    <td class="bold">
-                        {{ number_format($booking->advance_payment ?? 0,0) }}
-                    </td>
-                </tr>
-
-                @php
-                $remaining = max(
-                ($booking->total_net ?? 0) - ($booking->advance_payment ?? 0),
-                0
-                );
-                @endphp
-
-                <tr>
-                    <th>Remaining Amount</th>
-                    <td class="bold">{{ number_format($remaining,0) }}</td>
-                </tr>
-            </table>
-
-            <div class="line"></div>
-
-            <p class="bold" style="margin:0 0 4px">Amount In Words:</p>
-            <p id="amountInWords" style="margin:0">Loading...</p>
-
-            <!-- ===== FOOTER ===== -->
-            <div class="footer">
-                <p>Please check bakery items at the time of purchase</p>
-                <p>Bakery & sweets items are non-returnable</p>
-                <p>Developed By: ProWave Technologies</p>
-                <p>+92 317 3836 223 | +92 317 3859 647</p>
-                <p>*** Thank you for the visit ***</p>
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <script>
-        document.addEventListener("DOMContentLoaded", function() {
-
-            // ===== CONFIG =====
-            const returnTo = "{{ route('sale.add') }}"; // 👈 jahan back jana hai
-            const autoPrint = true; // print open hote hi
-
-            // ===== AMOUNT IN WORDS =====
-            function numberToWords(num) {
-                const o = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
-                    "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen",
-                    "Sixteen", "Seventeen", "Eighteen", "Nineteen"
-                ];
-                const t = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-
-                if (num === 0) return "Zero";
-
-                function c(n) {
-                    let s = "";
-                    if (n > 99) {
-                        s += o[Math.floor(n / 100)] + " Hundred ";
-                        n %= 100;
-                    }
-                    if (n > 19) {
-                        s += t[Math.floor(n / 10)] + " " + o[n % 10];
-                    } else {
-                        s += o[n];
-                    }
-                    return s.trim();
+        @foreach($bookingItems as $item)
+            @php 
+                $totalQty += (float)$item['qty']; 
+                $isKg = strtolower($item['unit']) === 'kg';
+                $displayQty = (float)$item['qty'];
+                $displayUnit = $item['unit'];
+                
+                if ($isKg && $displayQty < 1) {
+                    $displayQty = round($displayQty * 1000);
+                    $displayUnit = 'GRAM';
+                } else {
+                    $displayQty = (float)number_format($displayQty, 3);
                 }
+            @endphp
+            <tr class="item-row">
+              <td style="width: 40%;" class="bold">{{ $item['item_name'] }}</td>
+              <td class="col-price" style="width: 20%;">{{ number_format($item['price'], 0) }}</td>
+              <td class="col-qty" style="width: 20%;">{{ $displayQty }} {{ $displayUnit }}</td>
+              <td class="col-amount" style="width: 20%; font-weight: bold;">{{ number_format($item['total'], 0) }}</td>
+            </tr>
+        @endforeach
+      </tbody>
+    </table>
 
-                let r = "";
-                if (num >= 100000) r += c(Math.floor(num / 100000)) + " Lakh ";
-                if (num >= 1000) r += c(Math.floor((num % 100000) / 1000)) + " Thousand ";
-                r += c(num % 1000);
-                return r.trim();
-            }
+    <div class="line"></div>
 
-            const amt = parseFloat("{{ $remaining ?? 0 }}") || 0;
-            document.getElementById("amountInWords").innerText =
-                "Rupees " + numberToWords(Math.floor(amt)) + " Only";
+    <table class="totals-table">
+      <tr>
+        <th>Total Item</th>
+        <td style="text-align: left; width: 30%;">: {{ $totalItemsCount }}</td>
+        <th>Total Qty</th>
+        <td style="text-align: right;">: {{ $totalQty }}</td>
+      </tr>
+    </table>
 
-            // ===== AUTO PRINT + AUTO BACK =====
-            if (autoPrint) {
-                setTimeout(() => {
-                    window.print();
+    <div class="line"></div>
 
-                    const goBack = () => {
-                        try {
-                            window.location.href = returnTo;
-                        } catch (e) {
-                            if (history.length > 1) history.back();
-                        }
-                    };
+    <!-- Summary -->
+    <table class="totals-table">
+      <tr>
+        <th>Gross Amount</th>
+        <td>{{ number_format($booking->total_bill_amount ?? 0, 0) }}</td>
+      </tr>
+      @if(!empty($booking->total_extradiscount) && $booking->total_extradiscount > 0)
+      <tr>
+        <th>Discount</th>
+        <td>{{ number_format($booking->total_extradiscount, 0) }}</td>
+      </tr>
+      @endif
 
-                    // Chrome / modern browsers
-                    if ('onafterprint' in window) {
-                        window.onafterprint = goBack;
-                    }
+      <tr class="grand-total-row">
+        <th>Net Amount</th>
+        <td>{{ number_format($booking->total_net ?? 0, 0) }}</td>
+      </tr>
+      @php
+        $totalPaid = floatval($booking->advance_payment ?? 0) + floatval($booking->cash ?? 0) + floatval($booking->card ?? 0);
+        $remaining = max(($booking->total_net ?? 0) - $totalPaid, 0);
+      @endphp
+      @if(floatval($booking->advance_payment) > 0)
+      <tr>
+        <th>Advance Paid</th>
+        <td>{{ number_format($booking->advance_payment, 0) }}</td>
+      </tr>
+      @endif
 
-                    // fallback (agar onafterprint fire na ho)
-                    setTimeout(goBack, 1500);
+      @if(floatval($booking->cash ?? 0) > 0 || floatval($booking->card ?? 0) > 0)
+      <tr>
+        <th>Final Payment</th>
+        <td>{{ number_format(floatval($booking->cash ?? 0) + floatval($booking->card ?? 0), 0) }}</td>
+      </tr>
+      @endif
 
-                }, 400);
-            }
+      <tr style="font-size: 16px;">
+        <th>Remaining Amount</th>
+        <td>{{ number_format($remaining, 0) }}</td>
+      </tr>
+    </table>
 
-        });
-    </script>
+    <div class="line"></div>
 
+    <!-- Footer -->
+    <div class="footer center" style="font-weight: normal;">
+      <p style="margin: 5px 0;">Please check bakery items at the time of purchase</p>
+      <p style="margin: 5px 0;">Bakery & sweets items are non-returnable</p>
+      <p style="margin: 2px 0; font-size: 11px; font-weight: normal;">Develop By: ProWave Software Solutions</p>
+      <p style="margin: 2px 0; font-size: 11px; font-weight: normal;">+92 317 3836 223 | +92 317 3859 647</p>
+      <p style="margin: 10px 0;">*** Thank you for the visit ***</p>
+    </div>
+  </div>
+  @endforeach
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+
+
+      // ===== ACTIONS =====
+      const query = new URLSearchParams(window.location.search);
+      const returnTo = query.get('return_to') || "{{ route('sale.add') }}";
+      const autoprint = query.get('autoprint') === '1';
+
+      document.getElementById('btnPrint').addEventListener('click', () => window.print());
+
+      document.getElementById('btnBack').addEventListener('click', () => {
+        window.location.href = decodeURIComponent(returnTo);
+      });
+
+      if (autoprint) {
+        setTimeout(() => {
+          window.print();
+          const goBack = () => {
+            window.location.href = decodeURIComponent(returnTo);
+          };
+          if ('onafterprint' in window) {
+            window.onafterprint = goBack;
+          }
+          setTimeout(goBack, 2000);
+        }, 500);
+      }
+    });
+  </script>
 </body>
 
 </html>
