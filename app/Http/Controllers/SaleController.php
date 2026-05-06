@@ -1176,6 +1176,7 @@ class SaleController extends Controller
         $discounts = array_map('trim', explode(',', $sale->per_discount ?? ''));
         $qtys      = array_map('trim', explode(',', $sale->qty ?? ''));
         $totals    = array_map('trim', explode(',', $sale->per_total ?? ''));
+        $vIds      = array_map('trim', explode(',', $sale->variant_id ?? ''));
 
         // decode color JSON array (if stored like ["[]","[]"])
         $colors_json = json_decode($sale->color ?? '[]', true);
@@ -1286,6 +1287,7 @@ class SaleController extends Controller
 
             $items[] = [
                 'product_id'    => $product->id ?? ($productIdCandidate ?? ''),
+                'variant_id'    => $vIds[$index] ?? null,
                 'item_name'     => $product->item_name ?? (string)($p),
                 'item_code'     => $product->item_code ?? ($itemCodeCandidate ?? ''),
                 'brand'         => $product->brand->name ?? ($brands[$index] ?? ''),
@@ -1430,6 +1432,7 @@ class SaleController extends Controller
             'total'      => 'required|array',
             'total.*'    => 'nullable|numeric',
             'color'      => 'nullable|array',
+            'variant_id' => 'nullable|array',
         ]);
 
         DB::beginTransaction();
@@ -1440,6 +1443,7 @@ class SaleController extends Controller
             // Incoming arrays (may contain only selected return rows)
             $product_names = $request->input('product', []);     // product name or id text
             $product_ids   = $request->input('product_id', []);  // may be empty strings for some rows
+            $variant_ids   = $request->input('variant_id', []);
             $product_codes = $request->input('item_code', []);
             $brands        = $request->input('brand', $request->input('uom', [])); // some forms call it uom
             $units         = $request->input('unit', []);
@@ -1483,6 +1487,7 @@ class SaleController extends Controller
                 $disc  = isset($discounts[$i]) ? floatval($discounts[$i]) : 0;
                 $qty   = isset($quantities[$i]) ? floatval($quantities[$i]) : 0;
                 $total = isset($totals[$i]) ? floatval($totals[$i]) : ($price * $qty);
+                $vId   = isset($variant_ids[$i]) ? trim($variant_ids[$i]) : '';
                 $colorRaw = $colors[$i] ?? null;
 
                 // Skip rows with zero qty (not selected)
@@ -1537,22 +1542,52 @@ class SaleController extends Controller
                 }
 
                 if ($foundProduct) {
-                    // Update stock: find stock row for product in same branch/warehouse (use sale's warehouse if available)
-                    // If you use branch_id or auth()->id() use appropriate field
+                    // Update stock: find stock row for product in same branch/warehouse
                     $stockQuery = \App\Models\Stock::where('product_id', $foundProduct->id)
                                                     ->where('branch_id', 1)
                                                     ->where('warehouse_id', 1);
-                    // if your sale has warehouse info use that, else we use default 1
+
                     if (!empty($sale->warehouse_id)) {
                         $stockQuery->where('warehouse_id', $sale->warehouse_id);
                     }
-                    // optionally branch filter
-                    // $stockQuery->where('branch_id', auth()->id());
+
+                    // For KG items, we store stock in GRAMS and use variant_id = NULL
+                    $isKg = strtolower($foundProduct->unit_type ?? '') === 'kg';
+                    $returnQtyInDb = $qty;
+
+                    if ($isKg) {
+                        $stockQuery->whereNull('variant_id');
+                        $returnQtyInDb = $qty * 1000;
+                    } else {
+                        if (!empty($vId)) {
+                            $stockQuery->where('variant_id', $vId);
+                        } else {
+                            $stockQuery->whereNull('variant_id');
+                        }
+                    }
 
                     $stock = $stockQuery->first();
                     if ($stock) {
-                        $stock->qty = $stock->qty + $qty;
+                        $stock->qty = $stock->qty + $returnQtyInDb;
                         $stock->save();
+                    } else {
+                        // Create if not exists (defensive)
+                        \App\Models\Stock::create([
+                            'product_id'   => $foundProduct->id,
+                            'variant_id'   => ($isKg ? null : (!empty($vId) ? $vId : null)),
+                            'branch_id'    => 1,
+                            'warehouse_id' => $sale->warehouse_id ?? 1,
+                            'qty'          => $returnQtyInDb
+                        ]);
+                    }
+
+                    // Also sync back to variants table display column if applicable
+                    if (!empty($vId) && !$isKg) {
+                        $vModel = \App\Models\ProductVariant::find($vId);
+                        if ($vModel) {
+                            $vModel->stock_qty += $qty;
+                            $vModel->save();
+                        }
                     }
                 }
 

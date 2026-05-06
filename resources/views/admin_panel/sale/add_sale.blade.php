@@ -640,8 +640,17 @@ function openSzModal(p) {
         
         hGrams.oninput = function() {
             let g = parseFloat(this.value) || 0;
-            let uPrice = parseFloat(mPrice.value) || 0;
+            // Always use base product price for KG manual calculations
+            let uPrice = parseFloat(p.price) || 0;
+            
             if (g > 0) {
+                // If using helper, reset variant selection and update mPrice to base
+                if (selVarI !== null) {
+                    selVarI = null;
+                    document.querySelectorAll('#szGrid .szc').forEach(c => c.classList.remove('sel'));
+                    mPrice.value = uPrice;
+                }
+                
                 let qtyVal = (g / 1000);
                 mQty.value = qtyVal.toFixed(4);
                 mLabel.value = g + 'g';
@@ -657,8 +666,17 @@ function openSzModal(p) {
 
         hPriceVal.oninput = function() {
             let pVal = parseFloat(this.value) || 0;
-            let uPrice = parseFloat(mPrice.value) || 0;
+            // Always use base product price for KG manual calculations
+            let uPrice = parseFloat(p.price) || 0;
+            
             if (pVal > 0 && uPrice > 0) {
+                // If using helper, reset variant selection and update mPrice to base
+                if (selVarI !== null) {
+                    selVarI = null;
+                    document.querySelectorAll('#szGrid .szc').forEach(c => c.classList.remove('sel'));
+                    mPrice.value = uPrice;
+                }
+                
                 let calculatedQty = pVal / uPrice;
                 mQty.value = calculatedQty.toFixed(5); 
                 let g = Math.round(calculatedQty * 1000);

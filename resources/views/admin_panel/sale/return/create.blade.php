@@ -103,6 +103,7 @@
                         <tbody>
                             @foreach ($saleItems as $item)
                             <tr data-product-id="{{ $item['product_id'] }}"
+                                data-variant-id="{{ $item['variant_id'] ?? '' }}"
                                 data-price="{{ $item['price'] }}"
                                 data-unit="{{ $item['unit'] }}"
                                 data-item-disc="{{ $item['discount'] }}"
@@ -228,6 +229,8 @@
         $('#soldItemsTable').on('change', '.select-return-item', function() {
             const $row = $(this).closest('tr');
             const productId = String($row.data('product-id') ?? '');
+            const variantId = String($row.data('variant-id') ?? '');
+            const uniqueId = productId + '_' + variantId;
             const price = num($row.data('price'));
             const unit = $row.data('unit') || '';
             const itemDisc = num($row.data('item-disc'));
@@ -256,17 +259,18 @@
                     this.checked = false;
                     return;
                 }
-                if ($('#returnItemsTable tbody tr[data-product-id="' + productId + '"]').length) return;
+                if ($('#returnItemsTable tbody tr[data-unique-id="' + uniqueId + '"]').length) return;
 
                 const returnQtyDefault = Math.min(availableQty, 1);
 
                 // Build return row with textarea for note (and keep name color[] for backend)
                 const rowHtml = `
-<tr data-product-id="${escapeHtml(productId)}">
+<tr data-product-id="${escapeHtml(productId)}" data-variant-id="${escapeHtml(variantId)}" data-unique-id="${escapeHtml(uniqueId)}">
     <td class="text-start">
         ${escapeHtml(productName)}
         <input type="hidden" name="product[]" value="${escapeHtml(productName)}">
         <input type="hidden" name="product_id[]" value="${escapeHtml(productId)}">
+        <input type="hidden" name="variant_id[]" value="${escapeHtml(variantId)}">
         <input type="hidden" name="item_code[]" value="${escapeHtml(itemCode)}">
     </td>
     <td>${escapeHtml(itemCode)}</td>
@@ -307,7 +311,7 @@
                 if (newAvailable <= 0) $row.find('.select-return-item').prop('disabled', true);
             } else {
                 // unchecked: remove from return table and restore available qty
-                const $returnRow = $('#returnItemsTable tbody tr[data-product-id="' + productId + '"]');
+                const $returnRow = $('#returnItemsTable tbody tr[data-unique-id="' + uniqueId + '"]');
                 if ($returnRow.length) {
                     const prevQty = num($returnRow.find('.qty-input').val());
                     const currentAvailable = num($row.find('.available-qty').text());
@@ -323,9 +327,10 @@
         $('#returnItemsTable').on('click', '.remove-return-item', function() {
             const $returnRow = $(this).closest('tr');
             const productId = $returnRow.data('product-id');
+            const variantId = $returnRow.data('variant-id');
             const qtyRemoved = num($returnRow.find('.qty-input').val());
 
-            const $topRow = $('#soldItemsTable tbody tr[data-product-id="' + productId + '"]');
+            const $topRow = $('#soldItemsTable tbody tr[data-product-id="' + productId + '"][data-variant-id="' + variantId + '"]');
             if ($topRow.length) {
                 const curAvailable = num($topRow.find('.available-qty').text());
                 $topRow.find('.available-qty').text(curAvailable + qtyRemoved);
@@ -340,6 +345,7 @@
         $('#returnItemsTable').on('input', '.qty-input, .price-input, .disc-input', function() {
             const $row = $(this).closest('tr');
             const productId = $row.data('product-id');
+            const variantId = $row.data('variant-id');
             let qty = num($row.find('.qty-input').val());
             const price = num($row.find('.price-input').val());
             const disc = num($row.find('.disc-input').val());
@@ -357,7 +363,7 @@
 
             // update available = max - qty
             const topNew = num($row.find('.qty-input').attr('max')) - qty;
-            const $topRow = $('#soldItemsTable tbody tr[data-product-id="' + productId + '"]');
+            const $topRow = $('#soldItemsTable tbody tr[data-product-id="' + productId + '"][data-variant-id="' + variantId + '"]');
             if ($topRow.length) {
                 $topRow.find('.available-qty').text(topNew);
                 if (topNew <= 0) $topRow.find('.select-return-item').prop('disabled', true);
