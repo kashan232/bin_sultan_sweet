@@ -46,6 +46,11 @@
         background: rgba(255, 255, 255, 0.9);
         height: 30px;
     }
+
+    /* Modal Product Search Styles */
+    .modal-product-item.active .product-price {
+        color: #fff !important;
+    }
 </style>
 
 @section('content')
@@ -82,25 +87,69 @@
             </div>
             @endif
             <!-- ================= BASIC INFO ================= -->
+            <style>
+                .from-location-group .form-check-input {
+                    display: none;
+                }
+                .from-location-group .form-check-label {
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    border: 1px solid #dee2e6;
+                    background: #fff;
+                    display: block;
+                    width: 100%;
+                }
+                .from-location-group .form-check-input:checked + .form-check-label {
+                    background-color: #2563eb;
+                    color: white !important;
+                    border-color: #2563eb;
+                    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+                    transform: translateY(-1px);
+                }
+                .from-location-group .form-check-label:hover:not(.form-check-input:checked + .form-check-label) {
+                    background-color: #f8fafc;
+                    border-color: #cbd5e1;
+                }
+            </style>
             <div class="form-section">
-                <h6>📄 Transfer Information</h6>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6>📄 Transfer Information</h6>
+                    <div class="col-md-3">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light border-end-0 text-muted">📅</span>
+                            <input type="date" name="transfer_date" class="form-control border-start-0 ps-0" value="{{ date('Y-m-d') }}">
+                        </div>
+                    </div>
+                </div>
 
                 <div class="row g-4">
-                    <div class="col-md-4">
-                        <label>Date</label>
-                        <input type="date" name="transfer_date" class="form-control"
-                            value="{{ date('Y-m-d') }}">
-                    </div>
+                    <div class="col-md-12">
+                        <label class="fw-bold d-block mb-3 text-muted small text-uppercase tracking-wider">Select Source Location (From):</label>
+                        <div class="row g-3 from-location-group">
+                            <!-- Shop Radio -->
+                            <div class="col-6 col-sm-4 col-md-2">
+                                <div class="form-check p-0 m-0">
+                                    <input class="form-check-input fromLocation" type="radio" name="from_warehouse_id" id="fromShop" value="Shop">
+                                    <label class="form-check-label fw-bold p-3 rounded-3 shadow-sm text-center" for="fromShop">
+                                        <div class="fs-4 mb-1">🏪</div>
+                                        <div>Shop Stock</div>
+                                    </label>
+                                </div>
+                            </div>
 
-                    <div class="col-md-4">
-                        <label>From Warehouse</label>
-                        <select name="from_warehouse_id" id="from_warehouse_id" class="form-control select2">
-                            <option value="">Select Warehouse</option>
-                            <option value="Shop">Shop</option>
+                            <!-- Warehouse Radios -->
                             @foreach($warehouses as $warehouse)
-                            <option value="{{ $warehouse->id }}">{{ $warehouse->warehouse_name }}</option>
+                            <div class="col-6 col-sm-4 col-md-2">
+                                <div class="form-check p-0 m-0">
+                                    <input class="form-check-input fromLocation" type="radio" name="from_warehouse_id" id="fromWh{{ $warehouse->id }}" value="{{ $warehouse->id }}">
+                                    <label class="form-check-label fw-bold p-3 rounded-3 shadow-sm text-center" for="fromWh{{ $warehouse->id }}">
+                                        <div class="fs-4 mb-1">🏭</div>
+                                        <div class="text-truncate">{{ $warehouse->warehouse_name }}</div>
+                                    </label>
+                                </div>
+                            </div>
                             @endforeach
-                        </select>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -166,7 +215,7 @@
 
                         <div class="modal-header">
                             <h5 class="modal-title">Search Product</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            <button type="button" class="btn-close" data-dismiss="modal"></button>
                         </div>
 
                         <div class="modal-body">
@@ -206,7 +255,6 @@
                             <tr class="product_row">
                                 <td style="position:relative">
                                     <input type="hidden" name="product_id[]" class="product_id">
-                                    <input type="hidden" name="variant_id[]" class="variant_id">
                                     <input type="text" class="form-control productSearch" placeholder="Select product from Search (F2)" readonly>
                                 </td>
                                 <td>
@@ -268,8 +316,24 @@
 
 @section('scripts')
 <script>
-    // Prevent double submission
-    $('form').on('submit', function() {
+    // Prevent double submission and remove empty rows
+    $('form').on('submit', function(e) {
+        // Remove empty rows where product_id is not selected
+        $('#product_body tr').each(function() {
+            var productId = $(this).find('.product_id').val();
+            if (!productId || productId.trim() === '') {
+                $(this).remove();
+            }
+        });
+
+        // Ensure at least one valid product row exists
+        if ($('#product_body tr').length === 0) {
+            e.preventDefault();
+            alert('Please add at least one product before submitting.');
+            addNewRow(); // Add an empty row back so the user can continue
+            return false;
+        }
+
         const $btn = $(this).find('button[type="submit"]');
         if ($btn.hasClass('disabled')) return false; 
         $btn.addClass('disabled').text('Processing...');
@@ -280,7 +344,6 @@
 <tr class="product_row">
     <td style="position:relative">
         <input type="hidden" name="product_id[]" class="product_id">
-        <input type="hidden" name="variant_id[]" class="variant_id">
         <input type="text" class="form-control productSearch" placeholder="Select product from Search (F2)" readonly>
     </td>
     <td>
@@ -307,8 +370,76 @@
         }, 10);
     }
 
-    $(document).ready(function() {
+    function calculateCreateUnitTotals() {
+        let totals = {};
 
+        $('#product_table tbody tr').each(function() {
+            let qtyVal = $(this).find('.quantity').val();
+            let unitVal = $(this).find('.unit').val();
+
+            if (!qtyVal || !unitVal) return;
+
+            let qty = parseFloat(qtyVal);
+            let unit = unitVal.trim();
+
+            if (isNaN(qty) || qty <= 0) return;
+
+            totals[unit] = (totals[unit] || 0) + qty;
+        });
+
+        let html = '';
+
+        if (Object.keys(totals).length === 0) {
+            html = `<span class="text-muted">No quantities entered</span>`;
+        } else {
+            html += `<div class="d-flex gap-2 justify-content-end align-items-center">`;
+
+            Object.keys(totals).forEach(unit => {
+                let color = unitColors[unit] || 'secondary';
+
+                html += `
+            <div class="unit-total-box bg-${color} text-${color === 'warning' ? 'dark' : 'white'}">
+                <div class="label">${unit}</div>
+                <input type="text" value="${totals[unit].toFixed(2)}" readonly>
+            </div>
+        `;
+            });
+
+            html += `</div>`;
+        }
+
+        $('#unitTotalsFooter').html(html);
+    }
+
+    function refreshStockForAllRows() {
+        var fromWarehouse = $('.fromLocation:checked').val();
+        if (!fromWarehouse) {
+            $('#product_body tr').find('.stock').val('');
+            return;
+        }
+
+        $('#product_body tr').each(function() {
+            var $row = $(this);
+            var productId = $row.find('.product_id').val();
+            if (productId) {
+                $.get('/warehouse-stock-quantity', {
+                    warehouse_id: fromWarehouse,
+                    product_id: productId
+                }, function(response) {
+                    $row.find('.stock').val(response.quantity ?? 0);
+                });
+            }
+        });
+    }
+
+    const unitColors = {
+        Yard: 'primary',
+        Piece: 'success',
+        Meter: 'warning'
+    };
+
+    $(document).ready(function() {
+        calculateCreateUnitTotals();
 
         $('.transferType').on('change', function() {
             let type = $(this).val();
@@ -321,185 +452,18 @@
             $('select[name="to_warehouse_id"]').val('').trigger('change');
             $('input[name="shop_name"]').val('');
 
-            // reset stock for all rows
-            $('#product_body tr').each(function() {
-                $(this).find('.stock').val('');
-                $(this).find('.quantity').removeAttr('max');
-            });
-
             if (type === 'warehouse') {
                 $('#toWarehouseBox').removeClass('d-none');
             }
 
             if (type === 'shop') {
                 $('#toShopBox').removeClass('d-none');
-
-                // reload stock for shop (optional, e.g., all products = 0)
-                $('#product_body tr').each(function() {
-                    const productId = $(this).find('.product_id').val();
-                    if (!productId) return;
-                    $.get('/warehouse-stock-quantity', {
-                        warehouse_id: null,
-                        product_id: productId
-                    }, function(response) {
-                        $(this).find('.stock').val(response.quantity ?? 0);
-                    }.bind(this));
-                });
+                $('input[name="shop_name"]').val('Shop');
             }
         });
 
-        const unitColors = {
-            Yard: 'primary',
-            Piece: 'success',
-            Meter: 'warning'
-        };
-
-        function calculateCreateUnitTotals() {
-            let totals = {};
-
-            $('#product_table tbody tr').each(function() {
-                let qtyVal = $(this).find('.quantity').val();
-                let unitVal = $(this).find('.unit').val();
-
-                if (!qtyVal || !unitVal) return;
-
-                let qty = parseFloat(qtyVal);
-                let unit = unitVal.trim();
-
-                if (isNaN(qty) || qty <= 0) return;
-
-                totals[unit] = (totals[unit] || 0) + qty;
-            });
-
-            let html = '';
-
-            if (Object.keys(totals).length === 0) {
-                html = `<span class="text-muted">No quantities entered</span>`;
-            } else {
-                html += `<div class="d-flex gap-2 justify-content-end align-items-center">`;
-
-                Object.keys(totals).forEach(unit => {
-                    let color = unitColors[unit] || 'secondary';
-
-                    html += `
-                <div class="unit-total-box bg-${color} text-${color === 'warning' ? 'dark' : 'white'}">
-                    <div class="label">${unit}</div>
-                    <input type="text" value="${totals[unit].toFixed(2)}" readonly>
-                </div>
-            `;
-                });
-
-                html += `</div>`;
-            }
-
-            $('#unitTotalsFooter').html(html);
-        }
-
-
-
-        $(document).ready(function() {
-            calculateCreateUnitTotals();
-        });
-
-        // ---------- Helper: initialize a product-select element with Select2 ----------
-        function initProductSelect($sel) {
-            // prevent double-init
-            if ($sel.data('select2')) return;
-
-            $sel.select2({
-                placeholder: 'Select Product',
-                allowClear: true,
-                width: '100%',
-                dropdownParent: $sel.closest('td') // keeps dropdown aligned
-            });
-
-            // when product changes — fetch stock for this row
-            $sel.off('change.initStock').on('change.initStock', function() {
-                var $currentRow = $(this).closest('tr');
-                var selectedProduct = $(this).val();
-                var fromWarehouse = $('#from_warehouse_id').val();
-
-                // clear stock & qty if no product selected
-                if (!selectedProduct) {
-                    $currentRow.find('.stock').val('');
-                    $currentRow.find('.quantity').removeAttr('max').val('');
-                    return;
-                }
-
-                if (fromWarehouse) {
-                    // WAREHOUSE CASE
-                    $.get('/warehouse-stock-quantity', {
-                        warehouse_id: fromWarehouse,
-                        product_id: selectedProduct,
-                        variant_id: $currentRow.find('.variant_id').val()
-                    }, function(response) {
-                        $currentRow.find('.stock').val(response.quantity ?? 0);
-                    });
-                } else {
-                    // SHOP CASE
-                    $.get('/warehouse-stock-quantity', {
-                        warehouse_id: null, // blank ya null bhejna zaruri
-                        product_id: selectedProduct,
-                        variant_id: $currentRow.find('.variant_id').val()
-                    }, function(response) {
-                        $currentRow.find('.stock').val(response.quantity ?? 0);
-                        $currentRow.find('.quantity').removeAttr('max');
-                    });
-                }
-
-                // auto add new row if last row
-                if ($('#product_body tr:last').is($currentRow)) {
-                    addNewRow();
-                    setTimeout(function() {
-                        $('#product_body tr:last').find('.product-select').select2('open');
-                    }, 100);
-                }
-            });
-        }
-
-        // initialize existing product-select(s)
-        $('#product_body').find('.product-select').each(function() {
-            initProductSelect($(this));
-        });
-
-        // When 'From Warehouse' changes, clear all stock cells & refetch on current selects
-        $('#from_warehouse_id').on('change', function() {
-            var fromWarehouse = $(this).val();
-
-            $('#product_body tr').each(function() {
-                var $row = $(this);
-                var productId = $row.find('.product_id').val();
-
-                if (!productId) {
-                    $row.find('.stock').val('');
-                    $row.find('.quantity').removeAttr('max').val('');
-                    return;
-                }
-
-                if (fromWarehouse && fromWarehouse !== 'Shop') {
-                    // fetch stock from selected warehouse
-                    $.get('/warehouse-stock-quantity', {
-                        warehouse_id: fromWarehouse,
-                        product_id: productId,
-                        variant_id: $row.find('.variant_id').val()
-                    }, function(response) {
-                        $row.find('.stock').val(response.quantity ?? 0);
-                    });
-                } else if (fromWarehouse === 'Shop') {
-                    // fetch stock from Shop (warehouse_id = null or handle in controller)
-                    $.get('/warehouse-stock-quantity', {
-                        warehouse_id: null, // Shop stock
-                        product_id: productId,
-                        variant_id: $row.find('.variant_id').val()
-                    }, function(response) {
-                        $row.find('.stock').val(response.quantity ?? 0);
-                    });
-                } else {
-                    // no warehouse selected → clear
-                    $row.find('.stock').val('');
-                    $row.find('.quantity').removeAttr('max');
-                }
-            });
+        $(document).on('change', '.fromLocation', function() {
+            refreshStockForAllRows();
         });
 
         // Enter on quantity opens new row (existing behavior)
@@ -651,12 +615,38 @@
         lastBarcode = barcode;
         lastScanTime = now;
 
+        // --- Instant Client-side Lookup ---
+        let product = allProducts.find(p => p.barcode === barcode || p.item_code === barcode);
+
+        if (product) {
+            let res = {
+                id: product.id,
+                name: product.item_name,
+                code: product.item_code,
+                unit: product.unit_id,
+                price: product.price,
+                note: product.note
+            };
+            processTransferBarcodeResult(res, barcode);
+        } else {
+            // Fallback to server if not in cache
+            $.get("{{ route('search-product-by-barcode') }}", { barcode }, function(res) {
+                if (res && res.id) {
+                    processTransferBarcodeResult(res, barcode);
+                } else {
+                    alert('Product not found!');
+                }
+            });
+        }
+    }
+
+    function processTransferBarcodeResult(res, barcode) {
         let foundRow = null;
 
         // Check if product already exists
         $('#product_body tr').each(function() {
-            const pid = $(this).find('.product_id').data('barcode');
-            if (pid && pid === barcode) {
+            const pid = $(this).find('.product_id').val();
+            if (pid && parseInt(pid) === parseInt(res.id)) {
                 foundRow = $(this);
                 return false;
             }
@@ -673,12 +663,7 @@
             foundRow.addClass('table-success');
             setTimeout(() => foundRow.removeClass('table-success'), 1000);
 
-            // Auto-scroll to the row
-            foundRow[0].scrollIntoView({
-                behavior: 'smooth',
-                block: 'center'
-            });
-
+            foundRow[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
         }
 
@@ -689,38 +674,21 @@
             row = $('#product_body tr:last');
         }
 
-        // Fetch product details via AJAX
-        $.get("{{ route('search-product-by-barcode') }}", {
-            barcode
-        }, function(res) {
-            if (!res || !res.id) {
-                alert('Product not found!');
-                return;
-            }
+        // Fill product info
+        row.find('.product_id').val(res.id).data('barcode', barcode);
+        row.find('.productSearch').val(res.name).prop('readonly', true);
+        row.find('.unit').val(res.unit);
+        row.find('.price').val(res.price);
+        row.find('.quantity').val(1).trigger('input');
 
-            row.find('.product_id').val(res.id).data('barcode', barcode);
-            row.find('.productSearch').val(res.name).prop('readonly', true);
-            row.find('.unit').val(res.unit);
-            row.find('.price').val(res.price);
-            row.find('.quantity').val(1).trigger('input');
-            calculateCreateUnitTotals();
-            // Fetch stock
-            const fromWarehouse = $('#from_warehouse_id').val();
-            $.get('/warehouse-stock-quantity', {
-                warehouse_id: (fromWarehouse === 'Shop') ? null : fromWarehouse,
-                product_id: res.id,
-                variant_id: null
-            }, function(stock) {
-                row.find('.stock').val(stock.quantity ?? 0);
-            });
+        // Fetch stock
+        refreshStockForAllRows();
 
-            addNewRow();
+        // addNewRow(); // Remove auto-adding new row on barcode scan to allow qty edit
 
-            // ✅ Focus Product of the NEW row
-            setTimeout(() => {
-                $('#product_body tr:last .productSearch').focus();
-            }, 50);
-        });
+        setTimeout(() => {
+            row.find('.quantity').focus().select();
+        }, 50);
     }
 
 
@@ -768,7 +736,15 @@
         activeIndex = 0;
         setActiveItem(activeIndex); // First item active
     });
+$('#productModal').on('hidden.bs.modal', function () {
+    setTimeout(() => {
+        let $row = $('#product_body tr').filter(function () {
+            return $(this).find('.product_id').val();
+        }).last();
 
+        $row.find('.quantity').focus().select();
+    }, 100);
+});
 
     function openProductModal() {
 
@@ -784,51 +760,66 @@
     }
 
 
+    let allProducts = [];
+
+    function loadProducts() {
+        $.get("{{ route('get-all-products-for-search') }}", function(res) {
+            allProducts = res;
+            console.log("Cached all products:", allProducts.length);
+        });
+    }
+
+    $(document).ready(function() {
+        loadProducts();
+    });
+
     let modalTimer = null;
 
     $('#modalProductSearch').on('input', function() {
-        clearTimeout(modalTimer);
-        let q = $(this).val().trim();
+        let q = $(this).val().trim().toLowerCase();
 
         if (q.length < 2) {
             $('#modalSearchResults').empty();
             return;
         }
 
-        modalTimer = setTimeout(() => {
-            $.get("{{ route('search-product-name') }}", {
-                q
-            }, function(res) {
+        // --- Instant Client-side Filter ---
+        let filtered = allProducts.filter(p => {
+            const name = (p.item_name || "").toLowerCase();
+            const code = (p.item_code || "").toLowerCase();
+            const barcode = (p.barcode || "").toLowerCase();
+            const brand = (p.brand || "").toLowerCase();
+            return name.includes(q) || code.includes(q) || barcode.includes(q) || brand.includes(q);
+        });
 
-                let html = '';
-                res.forEach(p => {
+        // Limit to 50 results for UI performance
+        let results = filtered.slice(0, 50);
 
-                    let noteText = (p.note && p.note.trim() !== '') ? p.note : '-';
+        let html = '';
+        results.forEach(p => {
+            let noteText = (p.note && p.note.trim() !== '') ? p.note : '-';
 
-                    html += `
-<li class="list-group-item modal-product-item"
-    data-id="${p.id}"
-    data-variant-id="${p.variant_id ?? ''}"
-    data-name="${p.item_name}"
-    data-code="${p.item_code}"
-    data-price="${p.price}"
-    data-unit="${p.unit_id}"
-    data-brand="${p.brand ?? ''}"
-    data-note="${noteText}">
-    <strong>${p.item_name}</strong>
-    <br>
-    <small>Rs: ${p.price} | ${p.brand ?? '-'}</small>
-    <br>
-    <strong class="text-Dark">Note: ${noteText}</strong>
+            html += `
+                <li class="list-group-item modal-product-item"
+                    data-id="${p.id}"
+                    data-name="${p.item_name}"
+                    data-code="${p.item_code}"
+                    data-barcode="${p.barcode || ''}"
+                    data-price="${p.price}"
+                    data-unit="${p.unit_id}"
+                    data-brand="${p.brand ?? ''}"
+                    data-note="${noteText}">
+                    <strong>${p.item_name}</strong>
+                    <br>
+                    <span class="product-price" style="font-weight: 800; font-size: 1.2rem; color: #2563eb;">Rs: ${p.price}</span> | <small>${p.brand ?? '-'}</small>
+                    <br>
+                    <strong class="text-Dark">Note: ${noteText}</strong>
+                </li>`;
+        });
 
-</li>`;
-                });
-
-                $('#modalSearchResults').html(html);
-                activeIndex = -1;
-                setActiveItem(0);
-            });
-        }, 250);
+        $('#modalSearchResults').html(html);
+        activeIndex = -1;
+        setActiveItem(0);
     });
 
     $(document).on('mouseenter', '.modal-product-item', function() {
@@ -864,44 +855,36 @@
     });
 
     $(document).on('click', '.modal-product-item', function() {
-        let row = $('#product_body tr:last');
+        const p = $(this);
 
-        if (row.find('.product_id').val()) {
+        let $row = $('#product_body tr').filter(function() {
+            return !$(this).find('.product_id').val();
+        }).first();
+
+        if (!$row.length) {
             addNewRow();
-            row = $('#product_body tr:last');
+            $row = $('#product_body tr:last');
         }
 
-        row.find('.product_id').val($(this).data('id')).data('barcode', $(this).data('code'));
-        row.find('.variant_id').val($(this).data('variant-id'));
-        row.find('.productSearch').val($(this).data('name')).prop('readonly', true);
-        row.find('.unit').val($(this).data('unit'));
-        row.find('.price').val($(this).data('price'));
-        row.find('.quantity').val(1).trigger('input');
-        calculateCreateUnitTotals();
+        // Fill data
+        $row.find('.product_id').val(p.data('id'));
+        $row.find('.productSearch')
+            .val(p.data('name'))
+            .prop('readonly', true)
+            .addClass('bg-light');
 
-        const fromWarehouse = $('#from_warehouse_id').val();
-        if (fromWarehouse) {
-            $.get('/warehouse-stock-quantity', {
-                warehouse_id: fromWarehouse,
-                product_id: $(this).data('id'),
-                variant_id: $(this).data('variant-id')
-            }, function(stock) {
-                row.find('.stock').val(stock.quantity ?? 0);
-            });
-        }
+        $row.find('.unit').val(p.data('unit'));
+        $row.find('.price').val(p.data('price'));
+        $row.find('.product-note').val(p.data('note') || '');
 
+        $row.find('.quantity').val(1).trigger('input');
+
+        // Fetch stock
+        refreshStockForAllRows();
+
+        
+        // ❌ DO NOT append new row here
         $('#productModal').modal('hide');
-
-        // 🔥🔥 YEH LINE ADD / CONFIRM KARO
-        setTimeout(() => {
-            row.find('.quantity').focus().select();
-            
-            // Auto scroll to center the row (robust)
-            $('html, body').animate({
-                scrollTop: row.offset().top - ($(window).height() / 2) + (row.outerHeight() / 2)
-            }, 600);
-        }, 300);
-
     });
 
 

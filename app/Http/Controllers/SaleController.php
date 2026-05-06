@@ -240,9 +240,14 @@ class SaleController extends Controller
             ->whereDate('created_at', date('Y-m-d'))
             ->sum('total_bill_amount');
 
-        $netCash = $openingBalance + $todaySales;
+        // Calculate today's expenses for the logged-in user
+        $todayExpense = \App\Models\ExpenseVoucher::where('user_id', auth()->id())
+            ->whereDate('date', date('Y-m-d'))
+            ->sum('total_amount');
 
-        return view('admin_panel.sale.index', compact('openingBalance', 'todaySales', 'netCash'));
+        $netCash = $openingBalance + $todaySales - $todayExpense;
+
+        return view('admin_panel.sale.index', compact('openingBalance', 'todaySales', 'todayExpense', 'netCash'));
     }
 
     public function addsale()
@@ -1281,7 +1286,7 @@ class SaleController extends Controller
                 'total'         => floatval($totals[$index] ?? 0),
                 // send note (plain text) so blade can show it
                 'note'          => $note_value,
-                'available_qty' => $available,
+                'available_qty' => (float)$available == (int)$available ? (int)$available : number_format($available, 3, '.', ''),
             ];
         }
 
@@ -1667,7 +1672,9 @@ class SaleController extends Controller
                 // Walk-in Customer: do nothing in ledger
             }
             DB::commit();
-            return redirect()->route('sale.index')->with('success', 'Sale return saved successfully.');
+            $returnTo = route('sale.index');
+            $invoiceUrl = route('saleReturn.invoice', $saleReturn->id) . '?autoprint=1&return_to=' . urlencode($returnTo);
+            return redirect()->to($invoiceUrl)->with('success', 'Sale return saved successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', 'Sale return failed: ' . $e->getMessage());
@@ -2290,19 +2297,20 @@ class SaleController extends Controller
                 continue;
             }
 
-            $product = \App\Models\Product::where('item_name', trim($p))
+            $product = \App\Models\Product::with('category_relation', 'brand')->where('item_name', trim($p))
                 ->orWhere('item_code', trim($codes[$index] ?? ''))
                 ->first();
 
             $items[] = [
                 'product_id' => $product->id ?? '',
                 'item_name'  => $product->item_name ?? $p,
+                'category'   => ($product && $product->category_relation) ? $product->category_relation->name : 'Uncategorized',
                 'item_code'  => $product->item_code ?? ($codes[$index] ?? ''),
-                'brand'      => $product->brand->name ?? ($brands[$index] ?? ''),
-                'unit'       => $product->unit ?? ($units[$index] ?? ''),
+                'brand'      => ($product && $product->brand) ? $product->brand->name : ($brands[$index] ?? ''),
+                'unit'       => ($product && $product->unit_type) ? $product->unit_type : ($units[$index] ?? ''),
                 'price'      => floatval($prices[$index] ?? 0),
                 'discount'   => floatval($discounts[$index] ?? 0),
-                'qty'        => $qty,
+                'qty'        => (float)$qty,
                 'total'      => floatval($totals[$index] ?? 0),
                 'color'      => isset($colors_json[$index])
                     ? json_decode($colors_json[$index], true)

@@ -524,4 +524,24 @@ class ProductController extends Controller
     // }
 
 
+    public function getAllProductsForSearch()
+    {
+        $products = Product::with('brand')
+            ->select('id', 'item_name', 'item_code', 'barcode_path', 'price', 'unit_id', 'brand_id', 'note')
+            ->get()
+            ->map(function ($p) {
+                return [
+                    'id' => $p->id,
+                    'item_name' => $p->item_name,
+                    'item_code' => $p->item_code,
+                    'barcode' => $p->barcode_path,
+                    'price' => $p->price,
+                    'unit_id' => $p->unit_id,
+                    'brand' => $p->brand->name ?? '',
+                    'note' => $p->note ?? ''
+                ];
+            });
+
+        return response()->json($products);
+    }
 }

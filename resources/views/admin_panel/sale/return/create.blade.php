@@ -282,13 +282,13 @@
         <input type="hidden" name="unit[]" value="${escapeHtml(unit)}">
     </td>
     <td>
-        <input type="number" step="0.01" name="price[]" class="form-control form-control-sm price-input" value="${price}">
+        <input type="number" step="any" name="price[]" class="form-control form-control-sm price-input" value="${price}">
     </td>
     <td>
-        <input type="number" step="0.01" name="item_disc[]" class="form-control form-control-sm disc-input" value="${itemDisc}">
+        <input type="number" step="any" name="item_disc[]" class="form-control form-control-sm disc-input" value="${itemDisc}">
     </td>
     <td>
-        <input type="number" step="0.01" name="qty[]" class="form-control form-control-sm qty-input" value="${returnQtyDefault}" min="0.01" max="${availableQty}">
+        <input type="number" step="any" name="qty[]" class="form-control form-control-sm qty-input" value="${returnQtyDefault}" max="${availableQty}">
         <div class="small-muted">Max: <span class="max-qty">${availableQty}</span></div>
     </td>
     <td>
@@ -345,12 +345,11 @@
             const disc = num($row.find('.disc-input').val());
             const max = num($row.find('.qty-input').attr('max'));
 
-            if (qty > max) {
+            if ($(this).val() === "") {
+                qty = 0;
+            } else if (qty > max) {
                 qty = max;
                 $row.find('.qty-input').val(max);
-            } else if (qty < 0.01) {
-                qty = 0.01;
-                $row.find('.qty-input').val(0.01);
             }
 
             const newTotal = Math.max(0, (price * qty) - disc);
@@ -390,7 +389,7 @@
             $('#netAmount').val(net.toFixed(2));
             $('#change').val(change.toFixed(2));
             $('#amountInWords').val(numberToWords(Math.round(net)));
-            $('#totalPieces').text(totalQty);
+            $('#totalPieces').text(totalQty % 1 === 0 ? totalQty : totalQty.toFixed(3));
         }
 
         // numberToWords function for invoice words

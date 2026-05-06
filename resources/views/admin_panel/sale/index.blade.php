@@ -19,6 +19,9 @@
                 <div class="badge bg-primary fs-6 p-2 shadow-sm">
                     Today's Sale: {{ $fmt($todaySales ?? 0) }}
                 </div>
+                <div class="badge bg-danger fs-6 p-2 shadow-sm">
+                    Today's Expense: {{ $fmt($todayExpense ?? 0) }}
+                </div>
                 <div class="badge bg-dark fs-6 p-2 shadow-sm border border-light">
                     Net Cash: {{ $fmt($netCash ?? 0) }}
                 </div>
