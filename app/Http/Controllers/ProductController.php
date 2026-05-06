@@ -526,22 +526,41 @@ class ProductController extends Controller
 
     public function getAllProductsForSearch()
     {
-        $products = Product::with('brand')
+        $products = Product::with(['brand', 'variants'])
             ->select('id', 'item_name', 'item_code', 'barcode_path', 'price', 'unit_id', 'brand_id', 'note')
-            ->get()
-            ->map(function ($p) {
-                return [
-                    'id' => $p->id,
-                    'item_name' => $p->item_name,
-                    'item_code' => $p->item_code,
-                    'barcode' => $p->barcode_path,
-                    'price' => $p->price,
-                    'unit_id' => $p->unit_id,
-                    'brand' => $p->brand->name ?? '',
-                    'note' => $p->note ?? ''
-                ];
-            });
+            ->get();
 
-        return response()->json($products);
+        $results = [];
+        foreach ($products as $p) {
+            if ($p->variants->count() > 0) {
+                foreach ($p->variants as $v) {
+                    $results[] = [
+                        'id'         => $p->id,
+                        'variant_id' => $v->id,
+                        'item_name'  => $p->item_name . ' (' . ($v->size_label ?: $v->variant_name) . ')',
+                        'item_code'  => $p->item_code,
+                        'barcode'    => $p->barcode_path,
+                        'price'      => $v->price ?: $p->price,
+                        'unit_id'    => $p->unit_id,
+                        'brand'      => $p->brand->name ?? '',
+                        'note'       => $p->note ?? ''
+                    ];
+                }
+            } else {
+                $results[] = [
+                    'id'         => $p->id,
+                    'variant_id' => null,
+                    'item_name'  => $p->item_name,
+                    'item_code'  => $p->item_code,
+                    'barcode'    => $p->barcode_path,
+                    'price'      => $p->price,
+                    'unit_id'    => $p->unit_id,
+                    'brand'      => $p->brand->name ?? '',
+                    'note'       => $p->note ?? ''
+                ];
+            }
+        }
+
+        return response()->json($results);
     }
 }

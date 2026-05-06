@@ -421,7 +421,7 @@ async function fetchActiveOrder(id, name) {
                     brand: item.brand,
                     unitId: item.unit,
                     price: parseFloat(item.price),
-                    label: '', 
+                    label: item.label || '', 
                     qty: parseFloat(item.qty),
                     old_qty: parseFloat(item.old_qty),
                     disc: parseFloat(item.disc)

@@ -255,6 +255,7 @@
                             <tr class="product_row">
                                 <td style="position:relative">
                                     <input type="hidden" name="product_id[]" class="product_id">
+                                    <input type="hidden" name="variant_id[]" class="variant_id">
                                     <input type="text" class="form-control productSearch" placeholder="Select product from Search (F2)" readonly>
                                 </td>
                                 <td>
@@ -344,6 +345,7 @@
 <tr class="product_row">
     <td style="position:relative">
         <input type="hidden" name="product_id[]" class="product_id">
+        <input type="hidden" name="variant_id[]" class="variant_id">
         <input type="text" class="form-control productSearch" placeholder="Select product from Search (F2)" readonly>
     </td>
     <td>
@@ -421,10 +423,12 @@
         $('#product_body tr').each(function() {
             var $row = $(this);
             var productId = $row.find('.product_id').val();
+            var variantId = $row.find('.variant_id').val();
             if (productId) {
                 $.get('/warehouse-stock-quantity', {
                     warehouse_id: fromWarehouse,
-                    product_id: productId
+                    product_id: productId,
+                    variant_id: variantId
                 }, function(response) {
                     $row.find('.stock').val(response.quantity ?? 0);
                 });
@@ -621,6 +625,7 @@
         if (product) {
             let res = {
                 id: product.id,
+                variant_id: product.variant_id,
                 name: product.item_name,
                 code: product.item_code,
                 unit: product.unit_id,
@@ -646,7 +651,8 @@
         // Check if product already exists
         $('#product_body tr').each(function() {
             const pid = $(this).find('.product_id').val();
-            if (pid && parseInt(pid) === parseInt(res.id)) {
+            const vid = $(this).find('.variant_id').val();
+            if (pid && parseInt(pid) === parseInt(res.id) && vid == res.variant_id) {
                 foundRow = $(this);
                 return false;
             }
@@ -676,6 +682,7 @@
 
         // Fill product info
         row.find('.product_id').val(res.id).data('barcode', barcode);
+        row.find('.variant_id').val(res.variant_id || '');
         row.find('.productSearch').val(res.name).prop('readonly', true);
         row.find('.unit').val(res.unit);
         row.find('.price').val(res.price);
@@ -802,6 +809,7 @@ $('#productModal').on('hidden.bs.modal', function () {
             html += `
                 <li class="list-group-item modal-product-item"
                     data-id="${p.id}"
+                    data-variant_id="${p.variant_id || ''}"
                     data-name="${p.item_name}"
                     data-code="${p.item_code}"
                     data-barcode="${p.barcode || ''}"
@@ -868,6 +876,7 @@ $('#productModal').on('hidden.bs.modal', function () {
 
         // Fill data
         $row.find('.product_id').val(p.data('id'));
+        $row.find('.variant_id').val(p.data('variant_id') || '');
         $row.find('.productSearch')
             .val(p.data('name'))
             .prop('readonly', true)

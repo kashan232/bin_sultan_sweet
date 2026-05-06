@@ -474,6 +474,7 @@ class SaleController extends Controller
         $discounts = explode(',', $sale->per_discount);
         $qtys = explode(',', $sale->qty);
         $variant_ids = explode(',', $sale->variant_id ?? '');
+        $colors = json_decode($sale->color, true) ?: [];
 
         // Fetch Product models to get item_name
         $productMap = Product::whereIn('id', array_filter($products))->get()->keyBy('id');
@@ -492,6 +493,14 @@ class SaleController extends Controller
                 $display_name .= ' - ' . $variantMap[$vId];
             }
 
+            // Extract label (color field)
+            $label = '';
+            if (isset($colors[$index])) {
+                $rawLabel = $colors[$index];
+                $decoded = json_decode($rawLabel, true);
+                $label = is_array($decoded) ? ($decoded[0] ?? '') : $rawLabel;
+            }
+
             $items[] = [
                 'prod_id' => $pid,
                 'var_id'  => $vId,
@@ -502,7 +511,8 @@ class SaleController extends Controller
                 'price'   => floatval($prices[$index] ?? 0),
                 'disc'    => $discounts[$index] ?? 0,
                 'qty'     => floatval($qtys[$index] ?? 0),
-                'old_qty' => floatval($qtys[$index] ?? 0), // To track existing quantity
+                'old_qty' => floatval($qtys[$index] ?? 0), 
+                'label'   => $label,
             ];
         }
 
@@ -1002,7 +1012,7 @@ class SaleController extends Controller
             $sale->per_discount    = implode(',', $combined_discounts);
             $sale->qty             = implode(',', $combined_qtys);
             $sale->per_total       = implode(',', $combined_totals);
-            $sale->color           = implode(',', $combined_colors);
+            $sale->color           = json_encode($combined_colors);
             $sale->total_items     = $total_items;
             // The POS submits hidden inputs 
             $sale->total_bill_amount = $request->input('total_subtotal', $sale->total_bill_amount ?? array_sum($combined_totals));
@@ -1796,7 +1806,8 @@ class SaleController extends Controller
                     $pid = $diff['prod_id'];
                     $vid = $diff['var_id'] ?? '';
                     $productModel = $productMap[$pid] ?? null;
-                    $variantName = $vid ? ($variantMap[$vid] ?? '') : '';
+                    $vModel = $vid ? ($variantMap[$vid] ?? null) : null;
+                    $variantName = $vModel ? ($vModel->size_label ?: $vModel->variant_name) : '';
 
                     $displayName = $productModel ? $productModel->item_name : $pid;
                     if ($variantName) $displayName .= ' - ' . $variantName;
