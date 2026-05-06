@@ -282,13 +282,30 @@ class VendorController extends Controller
             'bilty_no' => 'nullable|string',
             'vehicle_no' => 'nullable|string',
             'transporter_name' => 'nullable|string',
+            'amount' => 'required|numeric|min:0',
             'delivery_date' => 'nullable|date',
             'note' => 'nullable|string',
         ]);
 
-        VendorBilty::create($request->all());
+        $bilty = VendorBilty::create($request->all());
 
-        return back()->with('success', 'Vendor bilty saved successfully.');
+        // Update vendor ledger closing balance (Liability Increases)
+        $ledger = VendorLedger::where('vendor_id', $request->vendor_id)->first();
+        if ($ledger) {
+            $ledger->closing_balance = (float)$ledger->closing_balance + (float)$request->amount;
+            $ledger->save();
+        } else {
+            // Create ledger if missing
+            VendorLedger::create([
+                'vendor_id' => $request->vendor_id,
+                'admin_or_user_id' => Auth::id(),
+                'opening_balance' => 0,
+                'closing_balance' => $request->amount,
+                'previous_balance' => 0,
+            ]);
+        }
+
+        return back()->with('success', 'Vendor bilty saved and ledger updated successfully.');
     }
 
     // Get vendor balance by vendor id

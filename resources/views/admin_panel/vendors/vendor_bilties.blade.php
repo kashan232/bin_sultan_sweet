@@ -31,6 +31,7 @@
                                 <th>Bilty No</th>
                                 <th>Vehicle No</th>
                                 <th>Transporter</th>
+                                <th>Amount</th>
                                 <th>Delivery Date</th>
                                 <th>Note</th>
                             </tr>
@@ -44,6 +45,7 @@
                                 <td>{{ $b->bilty_no }}</td>
                                 <td>{{ $b->vehicle_no }}</td>
                                 <td>{{ $b->transporter_name }}</td>
+                                <td>{{ number_format($b->amount, 2) }}</td>
                                 <td>{{ $b->delivery_date }}</td>
                                 <td>{{ $b->note }}</td>
                             </tr>
@@ -85,6 +87,10 @@
                     <div class="mb-2"><input class="form-control" name="bilty_no" placeholder="Bilty No"></div>
                     <div class="mb-2"><input class="form-control" name="vehicle_no" placeholder="Vehicle No"></div>
                     <div class="mb-2"><input class="form-control" name="transporter_name" placeholder="Transporter Name"></div>
+                    <div class="mb-2">
+                        <label>Bilty Amount</label>
+                        <input type="number" step="any" class="form-control" name="amount" placeholder="Amount" required>
+                    </div>
                     <div class="mb-2"><input type="date" class="form-control" name="delivery_date"></div>
                     <div class="mb-2"><textarea class="form-control" name="note" placeholder="Note (optional)"></textarea></div>
                 </div>
@@ -106,6 +112,7 @@ function clearBiltyForm() {
     $('#biltyModal input[name="bilty_no"]').val('');
     $('#biltyModal input[name="vehicle_no"]').val('');
     $('#biltyModal input[name="transporter_name"]').val('');
+    $('#biltyModal input[name="amount"]').val('');
     $('#biltyModal input[name="delivery_date"]').val('');
     $('#biltyModal textarea[name="note"]').val('');
 }

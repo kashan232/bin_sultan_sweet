@@ -1154,7 +1154,13 @@ class ReportingController extends Controller
             ->where('payment_date', '<', $start)
             ->sum('amount');
 
-        $opening = $initial + $prevPurchases + $prevInwards - $prevReturns - $prevPayments;
+        // 5. Prior Bilties (Debit: We owe more)
+        $prevBilties = DB::table('vendor_bilties')
+            ->where('vendor_id', $vendorId)
+            ->where('delivery_date', '<', $start)
+            ->sum('amount');
+
+        $opening = $initial + $prevPurchases + $prevInwards + $prevBilties - $prevReturns - $prevPayments;
 
         // 🔹 1. Purchases → Debit (we owe vendor)
         $purchases = DB::table('purchases')
@@ -1223,11 +1229,28 @@ class ReportingController extends Controller
                 ];
             });
 
+        // 🔹 4. Vendor Bilties → Debit (we owe vendor for freight/logistics)
+        $bilties = DB::table('vendor_bilties')
+            ->where('vendor_id', $vendorId)
+            ->whereBetween('delivery_date', [$start, $end])
+            ->get()
+            ->map(function ($b) {
+                return [
+                    'date' => $b->delivery_date,
+                    'invoice' => $b->bilty_no ?: 'Bilty',
+                    'description' => $b->note ?: 'Bilty Amount',
+                    'debit' => $b->amount,
+                    'credit' => 0,
+                    'sort_date' => $b->delivery_date
+                ];
+            });
+
         // 🔹 Merge all
         $transactions = $purchases
             ->merge($inwards)
             ->merge($returns)
             ->merge($payments)
+            ->merge($bilties)
             ->sortBy('sort_date')
             ->values()
             ->all();

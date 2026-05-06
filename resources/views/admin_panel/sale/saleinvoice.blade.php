@@ -379,10 +379,8 @@
 
     <table class="totals-table">
       <tr>
-        <th>Total Item</th>
-        <td style="text-align: left; width: 30%;">: {{ $totalItemsCount }}</td>
-        <th>Total Qty</th>
-        <td style="text-align: right;">: {{ $totalQty }}</td>
+        <th style="width: 40%;">Total Item</th>
+        <td style="text-align: left;">: {{ $totalItemsCount }}</td>
       </tr>
     </table>
 
