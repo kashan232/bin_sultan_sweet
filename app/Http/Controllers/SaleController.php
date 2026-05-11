@@ -265,7 +265,9 @@ class SaleController extends Controller
         $perPage = (int) $request->get('per_page', 60);
 
         $query = Product::with(['brand', 'stock', 'variants', 'activeDiscount', 'category_relation'])
-            ->withSum('stocks as total_stock', 'qty');
+            ->withSum(['stocks as total_stock' => function($q) {
+                $q->where('branch_id', 1)->where('warehouse_id', 1);
+            }], 'qty');
 
         if ($q !== '') {
             $query->where(function ($sub) use ($q) {
@@ -341,12 +343,17 @@ class SaleController extends Controller
                 'is_default'      => $v->is_default,
             ];
         });
+        $totalStock = Stock::where('product_id', $product->id)
+            ->where('branch_id', 1)
+            ->where('warehouse_id', 1)
+            ->sum('qty');
+
         return response()->json([
             'product_id'   => $product->id,
             'item_name'    => $product->item_name,
             'item_code'    => $product->item_code,
             'unit_type'    => $product->unit_type ?? 'piece',
-            'total_stock'  => $product->stock ? $product->stock->qty : 0,
+            'total_stock'  => (float) $totalStock,
             'variants'     => $variants,
         ]);
     }

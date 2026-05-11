@@ -701,7 +701,11 @@ function openSzModal(p) {
     };
 
     fetch(`${VAR_URL}/${p.id}`,{headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}})
-    .then(r=>r.json()).then(data=>{ curProd.variants=data.variants; renderSizes(data.variants); })
+    .then(r=>r.json()).then(data=>{ 
+        curProd.variants = data.variants; 
+        renderSizes(data.variants); 
+        document.getElementById('szTitle').innerHTML = '📦 Size — ' + data.item_name + ' <small class="badge bg-dark ms-2" style="font-size:11px">Avail: ' + fmtStk(data.total_stock, data.unit_type) + '</small>';
+    })
     .catch(()=>{ document.getElementById('szGrid').innerHTML='<p class="text-danger">Size load failed.</p>'; });
 }
 
