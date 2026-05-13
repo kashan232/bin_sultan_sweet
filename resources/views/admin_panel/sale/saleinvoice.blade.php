@@ -352,7 +352,11 @@
                     if (isset($colors[$loop->parent->index + $loop->index])) {
                         $label = $colors[$loop->parent->index + $loop->index];
                         $decoded = json_decode($label, true);
-                        $cleanLabel = is_array($decoded) ? ($decoded[0] ?? '') : $label;
+                        if (json_last_error() === JSON_ERROR_NONE && !is_null($decoded)) {
+                            $cleanLabel = is_array($decoded) ? ($decoded[0] ?? '') : $decoded;
+                        } else {
+                            $cleanLabel = $label;
+                        }
                         
                         if (!empty($cleanLabel) && strtolower($cleanLabel) !== strtolower($item['item_name'])) {
                             $customLabel = ' (' . $cleanLabel . ')';

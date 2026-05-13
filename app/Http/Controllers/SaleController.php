@@ -505,7 +505,11 @@ class SaleController extends Controller
             if (isset($colors[$index])) {
                 $rawLabel = $colors[$index];
                 $decoded = json_decode($rawLabel, true);
-                $label = is_array($decoded) ? ($decoded[0] ?? '') : $rawLabel;
+                if (json_last_error() === JSON_ERROR_NONE && !is_null($decoded)) {
+                    $label = is_array($decoded) ? ($decoded[0] ?? '') : $decoded;
+                } else {
+                    $label = $rawLabel;
+                }
             }
 
             $items[] = [
@@ -639,7 +643,7 @@ class SaleController extends Controller
                 $combined_discounts[]  = $discounts[$index] ?? 0;
                 $combined_qtys[]       = $quantities[$index] ?? 0;
                 $combined_totals[]     = $totals[$index] ?? 0;
-                $combined_colors[]     = json_encode($colors[$index] ?? []);
+                $combined_colors[]     = $colors[$index] ?? '';
 
                 $vId   = $variant_ids[$index] ?? null;
                 if ($vId === '') $vId = null; // Ensure null strictly for DB
@@ -897,7 +901,7 @@ class SaleController extends Controller
                 $combined_discounts[]   = $discounts[$index] ?? 0;
                 $combined_qtys[]        = $qty;
                 $combined_totals[]      = $totals[$index] ?? 0;
-                $combined_colors[]      = json_encode($colors[$index] ?? []);
+                $combined_colors[]      = $colors[$index] ?? '';
                 
                 $total_items += $qty;
 
@@ -2024,7 +2028,7 @@ class SaleController extends Controller
                 $combined_discounts[]   = $discounts[$index] ?? 0;
                 $combined_qtys[]        = $qty;
                 $combined_totals[]      = $totals[$index] ?? 0;
-                $combined_colors[]      = json_encode($colors[$index] ?? []);
+                $combined_colors[]      = $colors[$index] ?? '';
 
                 $total_items += $qty;
 

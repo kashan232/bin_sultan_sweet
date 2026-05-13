@@ -146,8 +146,7 @@ class ProductBookingController extends Controller
                 $combined_qtys[]       = $quantities[$index] ?? 0;
                 $combined_totals[]     = $totals[$index] ?? 0;
 
-                $rowColors = $colors[$index] ?? [];
-                $combined_colors[] = json_encode($rowColors);
+                $combined_colors[] = $colors[$index] ?? '';
 
                 $total_items += $qty;
             }
