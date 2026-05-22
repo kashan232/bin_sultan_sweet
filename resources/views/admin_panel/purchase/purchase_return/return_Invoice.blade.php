@@ -81,7 +81,7 @@
     {{-- HEADER --}}
     <div class="header">
         <h1>Bin Sultan</h1>
-        <p>Sweet & Bakers</p>
+        <p>Sweets & Bakers</p>
         <p>Chandni Market, Salahuddin Road, Cantt Hyderabad</p>
         <p>Phone: +92 327 9226901</p>
     </div>

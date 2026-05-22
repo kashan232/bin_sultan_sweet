@@ -252,8 +252,8 @@
     <div class="center">
       <div class="store-name">Bin Sultan</div>
       <div class="store-info">Sweet & Bakers</div>
-      <div class="store-info">Latifabad no 6 Near Shadman Hall Hyderabad</div>
-      <div class="store-info">Phone: 022-786661</div>
+      <div class="store-info">A-16/B Block-D Unit No. 6 Latifabad, Hyderabad</div>
+      <div class="store-info">Phone: 0334 2615888</div>
       
       <div class="receipt-title">Booking Receipt</div>
       <span class="copy-label">{{ $copy }}</span>

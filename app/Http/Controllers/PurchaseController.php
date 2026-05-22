@@ -147,7 +147,6 @@ class PurchaseController extends Controller
                 'purchase_date' => $validated['purchase_date'] ?? now(),
                 'invoice_no'    => $invoiceNo,
 
-                'purchase_to'   => $validated['purchase_to'], // 🔥 shop | warehouse
                 'warehouse_id'  => $validated['purchase_to'] === 'warehouse'
                     ? $validated['warehouse_id']
                     : null,
@@ -195,7 +194,6 @@ class PurchaseController extends Controller
                     'price'         => $price,
                     'item_discount' => $discPerPiece,
                     'qty'           => $qty,
-                    'note'          => $validated['item_note'][$index] ?? null,
                     'line_total'    => $lineTotal,
                 ]);
 

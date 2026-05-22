@@ -63,8 +63,8 @@
     <div class="center">
         <h2 style="margin:0;font-size:14px;" class="bold">Bin Sultan</h2>
         <p style="margin:0;">Sweets & Bakers</p>
-        <p style="margin:0;">Latifabad no 6 Near Shadman Hall  Hyderabad</p>
-        <p style="margin:0;">Phone: 022786661</p>
+        <p style="margin:0;">A-16/B Block-D Unit No. 6 Latifabad, Hyderabad</p>
+        <p style="margin:0;">Phone: 0334 2615888</p>
     </div>
 
     <div class="line"></div>
