@@ -729,9 +729,9 @@ $(document).ready(function() {
     document.getElementById('generateBarcodeBtn').addEventListener('click', function() {
         let currentValue = document.getElementById('barcodeInput').value.trim();
         let url = currentValue !== "" ? '/generate-barcode-image?code=' + currentValue : '{{ route("generate-barcode-image") }}';
-        fetch(url).then(res => res.json()).then(data => {
+        fetch(url).then(res => { if (!res.ok) throw new Error('Server error'); return res.json(); }).then(data => {
             document.getElementById('barcodeInput').value = data.barcode_number;
-        });
+        }).catch(err => console.error('Barcode error:', err));
     });
 
     // Image preview

@@ -640,52 +640,90 @@ function openSzModal(p) {
         
         hGrams.oninput = function() {
             let g = parseFloat(this.value) || 0;
-            // Always use base product price for KG manual calculations
-            let uPrice = parseFloat(p.price) || 0;
+            
+            let vPrice = parseFloat(p.price) || 0;
+            let variantKgSize = 1;
+
+            if (selVarI !== null && p.variants && p.variants[selVarI]) {
+                let v = p.variants[selVarI];
+                vPrice = parseFloat(v.price) || 0;
+                let sVal = parseFloat(v.size_value) || 0;
+                let sUnit = (v.size_unit || '').toLowerCase();
+                
+                if (sVal > 0) {
+                    if (sUnit === 'kg') {
+                        variantKgSize = sVal;
+                    } else if (sUnit === 'g' || sUnit === 'gm' || sUnit === 'gram' || sUnit === 'grams') {
+                        variantKgSize = sVal / 1000;
+                    } else if (sUnit === 'pound') {
+                         variantKgSize = sVal * 0.453592;
+                    }
+                }
+            }
             
             if (g > 0) {
-                // If using helper, reset variant selection and update mPrice to base
-                if (selVarI !== null) {
-                    selVarI = null;
-                    document.querySelectorAll('#szGrid .szc').forEach(c => c.classList.remove('sel'));
-                    mPrice.value = uPrice;
-                }
+                let targetKg = g / 1000;
+                let qtyVal = targetKg / variantKgSize;
                 
-                let qtyVal = (g / 1000);
                 mQty.value = qtyVal.toFixed(4);
-                mLabel.value = g + 'g';
-                if (uPrice > 0) {
-                    hPriceVal.value = Math.round(qtyVal * uPrice);
+                
+                let varName = (selVarI !== null && p.variants && p.variants[selVarI]) ? (p.variants[selVarI].size_label || p.variants[selVarI].name || '') : '';
+                let labelPrefix = varName ? (varName + ' ') : '';
+                mLabel.value = labelPrefix + g + 'g';
+                
+                if (vPrice > 0) {
+                    hPriceVal.value = Math.round(qtyVal * vPrice);
                 }
+                mPrice.value = vPrice;
             } else {
                 mQty.value = 1;
                 mLabel.value = originalLabel;
                 hPriceVal.value = '';
+                mPrice.value = vPrice;
             }
         };
 
         hPriceVal.oninput = function() {
             let pVal = parseFloat(this.value) || 0;
-            // Always use base product price for KG manual calculations
-            let uPrice = parseFloat(p.price) || 0;
             
-            if (pVal > 0 && uPrice > 0) {
-                // If using helper, reset variant selection and update mPrice to base
-                if (selVarI !== null) {
-                    selVarI = null;
-                    document.querySelectorAll('#szGrid .szc').forEach(c => c.classList.remove('sel'));
-                    mPrice.value = uPrice;
-                }
+            let vPrice = parseFloat(p.price) || 0;
+            let variantKgSize = 1;
+
+            if (selVarI !== null && p.variants && p.variants[selVarI]) {
+                let v = p.variants[selVarI];
+                vPrice = parseFloat(v.price) || 0;
+                let sVal = parseFloat(v.size_value) || 0;
+                let sUnit = (v.size_unit || '').toLowerCase();
                 
-                let calculatedQty = pVal / uPrice;
+                if (sVal > 0) {
+                    if (sUnit === 'kg') {
+                        variantKgSize = sVal;
+                    } else if (sUnit === 'g' || sUnit === 'gm' || sUnit === 'gram' || sUnit === 'grams') {
+                        variantKgSize = sVal / 1000;
+                    } else if (sUnit === 'pound') {
+                         variantKgSize = sVal * 0.453592;
+                    }
+                }
+            }
+            
+            if (pVal > 0 && vPrice > 0) {
+                let calculatedQty = pVal / vPrice; // number of packages
                 mQty.value = calculatedQty.toFixed(5); 
-                let g = Math.round(calculatedQty * 1000);
-                mLabel.value = g + 'g (' + pVal + ' Rs)';
+                
+                let targetKg = calculatedQty * variantKgSize;
+                let g = Math.round(targetKg * 1000);
+                
+                let varName = (selVarI !== null && p.variants && p.variants[selVarI]) ? (p.variants[selVarI].size_label || p.variants[selVarI].name || '') : '';
+                let labelPrefix = varName ? (varName + ' ') : '';
+                mLabel.value = labelPrefix + g + 'g (' + pVal + ' Rs)';
+                
                 hGrams.value = g;
+                mPrice.value = vPrice;
             } else if (pVal === 0) {
                 mQty.value = 1;
                 mLabel.value = originalLabel;
                 hGrams.value = '';
+                mPrice.value = vPrice;
             }
         };
     } else {
@@ -764,6 +802,17 @@ function selectSz(el, i, v) {
     const pf = document.getElementById('mPrice');
     pf.style.background = '#e8f5e9';
     setTimeout(function() { pf.style.background = ''; }, 400);
+
+    // Re-trigger calculation if grams or price is filled
+    const hGrams = document.getElementById('hGrams');
+    if (hGrams && hGrams.value) {
+        hGrams.dispatchEvent(new Event('input'));
+    } else {
+        const hPriceVal = document.getElementById('hPriceVal');
+        if (hPriceVal && hPriceVal.value) {
+            hPriceVal.dispatchEvent(new Event('input'));
+        }
+    }
 }
 
 function openSingleModal(p) {

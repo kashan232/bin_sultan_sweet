@@ -755,16 +755,18 @@ $(document).ready(function() {
         let currentValue = document.getElementById('barcodeInput').value.trim();
         if (currentValue !== "") {
             fetch('/generate-barcode-image?code=' + currentValue)
-                .then(res => res.json())
+                .then(res => { if (!res.ok) throw new Error('Server error'); return res.json(); })
                 .then(data => {
                     document.getElementById('barcodeInput').value = data.barcode_number;
-                });
+                })
+                .catch(err => console.error('Barcode error:', err));
         } else {
             fetch('{{ route("generate-barcode-image") }}')
-                .then(res => res.json())
+                .then(res => { if (!res.ok) throw new Error('Server error'); return res.json(); })
                 .then(data => {
                     document.getElementById('barcodeInput').value = data.barcode_number;
-                });
+                })
+                .catch(err => console.error('Barcode error:', err));
         }
     });
 </script>
