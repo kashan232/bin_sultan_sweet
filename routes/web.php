@@ -44,7 +44,7 @@ use App\Http\Controllers\StockAdjustmentController;
     | be assigned to the "web" middleware group. Make something great!
     |
     */
-
+// kashan connection_aborted
 Route::get('/home', [HomeController::class, 'index'])->middleware('auth')->name('home');
 
 Route::get('System/Reports', [HomeController::class, 'System_Reports'])->name('System.Reports')->middleware('permission:System Reports');
