@@ -62,7 +62,7 @@
     <!-- Header -->
     <div class="center">
         <h2 style="margin:0;font-size:14px;" class="bold">Bin Sultan</h2>
-        <p style="margin:0;">Sweet & Bakers</p>
+        <p style="margin:0;">Sweets & Bakers</p>
         <p style="margin:0;">Latifabad no 6 Near Shadman Hall  Hyderabad</p>
         <p style="margin:0;">Phone: 022786661</p>
     </div>
@@ -93,7 +93,12 @@
         <tbody>
             @foreach($saleItems as $item)
             <tr>
-                <td>{{ $item['item_name'] }}</td>
+                <td>
+                    {{ $item['item_name'] }}
+                    @if(isset($item['discount']) && $item['discount'] > 0)
+                        <br><small style="font-weight:normal;">Disc: {{ number_format($item['discount'], 0) }}</small>
+                    @endif
+                </td>
                 <td>{{ $item['qty'] }} {{ $item['unit'] }}</td>
                 <td>{{ number_format($item['price'], 0) }}</td>
                 <td>{{ number_format($item['total'], 0) }}</td>

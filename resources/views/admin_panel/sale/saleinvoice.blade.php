@@ -196,7 +196,6 @@
       }
 
       @page {
-        size: 80mm auto;
         margin: 0;
       }
 
@@ -285,7 +284,7 @@
     <div class="center">
       <img src="{{ asset('assets/images/logo.jpeg') }}" alt="Logo" style="max-height: 80px; margin-bottom: 5px;">
       <div class="store-name">Bin Sultan</div>
-      <div class="store-info">Sweet & Bakers</div>
+      <div class="store-info">Sweets & Bakers</div>
       <div class="store-info">Latifabad no 6 Near Shadman Hall Hyderabad</div>
       <div class="store-info">Phone: 022-786661</div>
       
@@ -369,7 +368,12 @@
                 }
             @endphp
             <tr class="item-row">
-              <td style="width: 40%;" class="bold">{{ $cleanItemName }}{{ $customLabel }}</td>
+              <td style="width: 40%;" class="bold">
+                  {{ $cleanItemName }}
+                  @if(isset($item['discount']) && $item['discount'] > 0)
+                      <br><small style="font-weight:normal;font-size:12px;">Disc: Rs {{ number_format($item['discount'], 0) }}</small>
+                  @endif
+              </td>
               <td class="col-price" style="width: 20%;">{{ number_format($item['price'], 0) }}</td>
               <td class="col-qty" style="width: 20%;">{{ $displayQty }} {{ $displayUnit }}</td>
               <td class="col-amount" style="width: 20%; font-weight: bold;">{{ number_format($item['total'], 0) }}</td>
@@ -440,7 +444,7 @@
     <!-- Footer -->
     <div class="footer center" style="font-weight: normal;">
       <p style="margin: 5px 0;">Please check bakery items at the time of purchase</p>
-      <p style="margin: 5px 0;">Bakery & sweets items are non-returnable</p>
+      <p style="margin: 5px 0;">Bakery & Sweets items are non-returnable</p>
       <p style="margin: 2px 0; font-size: 11px; font-weight: normal;">Develop By: ProWave Software Solutions</p>
       <p style="margin: 2px 0; font-size: 11px; font-weight: normal;">+92 317 3836 223 | +92 317 3859 647</p>
       <p style="margin: 10px 0;">*** Thank you for the visit ***</p>
