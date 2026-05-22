@@ -117,6 +117,13 @@
     <table>
         <tr><th>Total Pieces</th><td>{{ $sale->total_items }}</td></tr>
         <tr><th>Sale Type</th><td>CASH</td></tr>
+        <tr><th>Gross Amount</th><td>{{ number_format($sale->total_bill_amount ?? 0, 0) }}</td></tr>
+        @if(!empty($sale->total_extradiscount) && $sale->total_extradiscount > 0)
+        @php 
+            $discPercent = ($sale->total_bill_amount > 0) ? ($sale->total_extradiscount / $sale->total_bill_amount * 100) : 0;
+        @endphp
+        <tr><th>Discount ({{ number_format($discPercent, 2) }}%)</th><td>{{ number_format($sale->total_extradiscount, 0) }}</td></tr>
+        @endif
         <tr><th>Net Amount</th><td>{{ number_format($sale->total_net, 0) }}</td></tr>
         <tr><th>Cash</th><td>{{ number_format($sale->cash, 0) }}</td></tr>
         <tr><th>Change</th><td>{{ number_format($sale->change, 0) }}</td></tr>

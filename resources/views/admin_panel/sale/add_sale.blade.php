@@ -209,8 +209,9 @@
     <div class="ord-sum">
         <div class="sr"><span>Subtotal</span><span id="sSubtotal">Rs 0.00</span></div>
         <div class="sr" style="display:none;"><span>Item Disc.</span><span id="sItemDisc">Rs 0.00</span></div>
-        <div class="sr"><span>Extra Disc.</span>
-            <input type="number" id="extraDisc" name="total_extra_cost" class="disc-i" value="0" min="0">
+        <div class="sr"><span>Extra Disc. (%)</span>
+            <input type="number" id="extraDisc" class="disc-i" value="0" min="0" placeholder="%" step="any">
+            <input type="hidden" id="hExtraDisc" name="total_extra_cost" value="0">
         </div>
         <div class="sr big"><span>NET TOTAL</span><span id="sNet">Rs 0.00</span></div>
         <div class="cash-row">
@@ -1016,7 +1017,9 @@ function clearOrder(prompt = true){
 function recalc(){
     let sub=0,iDisc=0,pcs=0;
     cart.forEach(item=>{ const r=item.qty*item.price,t=rowTotal(item); sub+=t; iDisc+=r-t; pcs+=item.qty; });
-    const ex=parseFloat(document.getElementById('extraDisc').value)||0;
+    const ex_pct=parseFloat(document.getElementById('extraDisc').value)||0;
+    const ex = sub * (ex_pct / 100);
+    if(document.getElementById('hExtraDisc')) document.getElementById('hExtraDisc').value = ex.toFixed(2);
     const cs=parseFloat(document.getElementById('cashI').value)||0;
     const cd=parseFloat(document.getElementById('cardI').value)||0;
     const net=Math.max(0,sub-ex), chng=(cs+cd)-net;

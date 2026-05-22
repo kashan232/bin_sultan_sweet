@@ -819,7 +819,7 @@ class SaleController extends Controller
             // Redirect logic
             if ($model instanceof \App\Models\Sale) {
                 $returnTo = route('sale.add');
-                $printMode = ($action === 'save_token') ? 'token_only' : (in_array($model->order_type ?? '', ['Takeaway']) ? 'token_and_invoice' : 'invoice');
+                $printMode = ($action === 'save_token') ? 'token_only' : 'invoice';
                 $invoiceUrl = route('sales.invoice', $model->id) . '?return_to=' . urlencode($returnTo) . '&autoprint=1&mode=' . $printMode;
                 return redirect()->to($invoiceUrl)->with('success', $action === 'save_token' ? 'Order Saved.' : 'Sale completed.');
             } else {
@@ -1066,7 +1066,7 @@ class SaleController extends Controller
             }
 
             // Dine-in final sale: print only invoice wrapper (not token again)
-            $printMode = in_array($sale->order_type ?? '', ['Takeaway']) ? 'token_and_invoice' : 'invoice';
+            $printMode = 'invoice';
             $invoiceUrl = route('sales.invoice', $sale->id) . '?mode=' . $printMode . '&autoprint=1&return_to=' . urlencode($returnTo);
             return redirect()->to($invoiceUrl);
 

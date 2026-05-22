@@ -185,13 +185,30 @@ class StockTransferController extends Controller
     {
         $productId   = $request->product_id;
         $variantId   = $request->variant_id;
+        if (empty($variantId) || $variantId === 'null') {
+            $variantId = null;
+        }
         $warehouseId = $request->warehouse_id;
 
         if (!empty($warehouseId) && $warehouseId !== 'Shop') {
-            $stock = WarehouseStock::where('warehouse_id', $warehouseId)
-                ->where('product_id', $productId)
-                ->where('variant_id', $variantId)
-                ->first();
+            $query = WarehouseStock::where('warehouse_id', $warehouseId)
+                ->where('product_id', $productId);
+                
+            if ($variantId) {
+                $query->where('variant_id', $variantId);
+            } else {
+                $query->whereNull('variant_id');
+            }
+
+            $stock = $query->first();
+            
+            // Fallback for legacy records that might have been saved without a variant_id
+            if (!$stock && $variantId) {
+                $stock = WarehouseStock::where('warehouse_id', $warehouseId)
+                    ->where('product_id', $productId)
+                    ->whereNull('variant_id')
+                    ->first();
+            }
 
             return response()->json([
                 'quantity' => $stock ? $stock->quantity : 0,
@@ -199,9 +216,21 @@ class StockTransferController extends Controller
             ]);
         }
 
-        $stock = Stock::where('product_id', $productId)
-            ->where('variant_id', $variantId)
-            ->first();
+        $query = Stock::where('product_id', $productId);
+        if ($variantId) {
+            $query->where('variant_id', $variantId);
+        } else {
+            $query->whereNull('variant_id');
+        }
+        
+        $stock = $query->first();
+
+        // Fallback for shop stock as well
+        if (!$stock && $variantId) {
+            $stock = Stock::where('product_id', $productId)
+                ->whereNull('variant_id')
+                ->first();
+        }
 
         return response()->json([
             'quantity' => $stock ? $stock->qty : 0,
