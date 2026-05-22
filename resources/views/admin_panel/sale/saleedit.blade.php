@@ -203,8 +203,8 @@
         </div>
         <div class="sr big"><span>NET TOTAL</span><span id="sNet">Rs 0.00</span></div>
         <div class="cash-row">
-            <div class="cg"><label>💵 Cash</label><input type="number" id="cashI" value="{{ $sale->cash }}" name="cash" value="0" min="0"></div>
-            <div class="cg"><label>💳 Card</label><input type="number" id="cardI" value="{{ $sale->card }}" name="card" value="0" min="0"></div>
+            <div class="cg"><label>💵 Cash</label><input type="number" id="cashI" value="{{ $sale->cash == 0 ? '' : $sale->cash }}" name="cash" placeholder="0" min="0"></div>
+            <div class="cg"><label>💳 Card</label><input type="number" id="cardI" value="{{ $sale->card == 0 ? '' : $sale->card }}" name="card" placeholder="0" min="0"></div>
         </div>
         <div class="chng-bar"><span>Change / Balance</span><span id="chngAmt">0.00</span></div>
         <input type="hidden" name="total_subtotal" id="hSub">

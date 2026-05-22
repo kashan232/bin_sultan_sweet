@@ -207,7 +207,7 @@
                                 <span class="input-group-text bg-primary text-white">Rs.</span>
                                 <input type="number" name="card" id="cardInput" 
                                        class="form-control fw-bold text-primary" 
-                                       placeholder="0" step="0.01" value="0">
+                                       placeholder="0" step="0.01">
                             </div>
                         </div>
                         
