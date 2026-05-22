@@ -42,4 +42,9 @@ class Sale extends Model
     {
         return $this->belongsTo(User::class, 'user_id');
     }
+
+    public function table()
+    {
+        return $this->belongsTo(Table::class, 'table_id');
+    }
 }

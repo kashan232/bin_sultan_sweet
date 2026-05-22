@@ -75,6 +75,10 @@
     <table>
         <tr><th>Customer:</th><td>Counter Sale</td></tr>
         <tr><th>Reference:</th><td>#{{ $sale->id }}</td></tr>
+        <tr><th>Order Type:</th><td>{{ $sale->order_type ?? 'Walk-in' }}</td></tr>
+        @if(isset($sale->order_type) && $sale->order_type == 'Dine-in' && $sale->table_id)
+        <tr><th>Table No:</th><td>{{ $sale->table->table_name ?? 'N/A' }}</td></tr>
+        @endif
         <tr><th>Print Time:</th><td>{{ \Carbon\Carbon::parse($sale->created_at)->format('d-m-Y H:i:s') }}</td></tr>
     </table>
 

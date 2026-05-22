@@ -302,6 +302,16 @@
         <td>: {{ $sale->user->name ?? 'Admin' }}</td>
       </tr>
       <tr>
+        <th>Order Type</th>
+        <td>: {{ $sale->order_type ?? 'Walk-in' }}</td>
+      </tr>
+      @if(isset($sale->order_type) && $sale->order_type == 'Dine-in' && $sale->table_id)
+      <tr>
+        <th>Table No</th>
+        <td>: {{ $sale->table->table_name ?? 'N/A' }}</td>
+      </tr>
+      @endif
+      <tr>
         <th>Invoice Date</th>
         <td>: {{ optional($sale->created_at)->format('D, d-M-Y h:i A') }}</td>
       </tr>
