@@ -199,7 +199,7 @@
 
       @page {
         margin: 0;
-        size: auto;
+        size: 56mm auto;
       }
 
       html, body {
@@ -214,7 +214,7 @@
         width: 100% !important;
         max-width: 100% !important;
         margin: 0 !important;
-        padding: 2mm 0 !important;
+        padding: 1mm 0 !important;
         page-break-inside: avoid;
         page-break-after: avoid;
       }
@@ -222,18 +222,28 @@
       table, tr, td, th, tbody, thead, tfoot {
         page-break-inside: avoid !important;
       }
-      
-      /* Reduce font sizes slightly for print to ensure they fit */
-      body {
-        font-size: 12px;
+
+      table {
+        table-layout: fixed;
+        width: 100%;
+        word-wrap: break-word;
       }
-      .store-name { font-size: 18px; }
-      .store-info { font-size: 11px; }
-      .receipt-title { font-size: 16px; }
-      .items-table thead th { font-size: 12px; }
-      .item-row td { font-size: 12px; }
+
+      th, td {
+        white-space: normal !important;
+        padding: 1px !important;
+      }
+      
+      body {
+        font-size: 10px;
+      }
+      .store-name { font-size: 14px; }
+      .store-info { font-size: 10px; }
+      .receipt-title { font-size: 12px; }
+      .items-table thead th { font-size: 10px; }
+      .item-row td { font-size: 10px; }
       .totals-table .grand-total-row th,
-      .totals-table .grand-total-row td { font-size: 16px; }
+      .totals-table .grand-total-row td { font-size: 12px; }
     }
 
     .page-break {

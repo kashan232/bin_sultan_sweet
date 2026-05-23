@@ -56,7 +56,7 @@
     @media print {
         @page {
             margin: 0;
-            size: auto;
+            size: 56mm auto;
         }
         html, body {
             margin: 0;
@@ -68,12 +68,25 @@
             width: 100% !important;
             max-width: 100% !important;
             margin: 0 !important;
-            padding: 2mm 0 !important;
+            padding: 1mm 0 !important;
             page-break-inside: avoid;
             page-break-after: avoid;
         }
         table, tr, td, th, tbody, thead, tfoot {
             page-break-inside: avoid !important;
+        }
+        table {
+            table-layout: fixed;
+            width: 100%;
+            word-wrap: break-word;
+        }
+        th, td {
+            white-space: normal !important;
+            padding: 1px !important;
+            font-size: 10px !important;
+        }
+        body {
+            font-size: 10px !important;
         }
     }
 </style>
