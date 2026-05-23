@@ -56,7 +56,7 @@
     @media print {
         @page {
             margin: 0;
-            size: 56mm auto;
+            size: 80mm auto;
         }
         html, body {
             margin: 0;
@@ -65,10 +65,10 @@
             height: auto;
         }
         .receipt-container {
-            width: 100% !important;
+            width: 74mm !important;
             max-width: 100% !important;
-            margin: 0 !important;
-            padding: 1mm 0 !important;
+            margin: 0 auto !important;
+            padding: 2mm !important;
             page-break-inside: avoid;
             page-break-after: avoid;
         }
@@ -89,12 +89,23 @@
             font-size: 10px !important;
         }
     }
+    .page-break {
+        page-break-after: always;
+    }
 </style>
 </head>
 <body>
 
-<div class="receipt-container">
-
+@php
+    $printCopies = (isset($sale->order_type) && strtolower($sale->order_type) == 'takeaway') ? 2 : 1;
+@endphp
+@for($c = 0; $c < $printCopies; $c++)
+<div class="receipt-container @if($c < $printCopies - 1) page-break @endif">
+    @if($printCopies > 1)
+        <div class="center" style="font-size:11px; font-weight:bold; margin-bottom:5px;">
+            {{ $c == 0 ? 'Customer Copy' : 'Bakery Copy' }}
+        </div>
+    @endif
     <!-- Header -->
     <div class="center">
         <h2 style="margin:0;font-size:14px;" class="bold">Bin Sultan</h2>
@@ -109,6 +120,7 @@
 
     <!-- Details -->
     <table>
+        <tr><th>Operator Name:</th><td>{{ auth()->user()->name ?? 'Admin' }}</td></tr>
         <tr><th>Customer:</th><td>Counter Sale</td></tr>
         <tr><th>Reference:</th><td>#{{ $sale->id }}</td></tr>
         <tr><th>Order Type:</th><td>{{ $sale->order_type ?? 'Walk-in' }}</td></tr>
@@ -175,6 +187,7 @@
  ***</p>
     </div>
 </div>
+@endfor
 
 <script>
     window.onload = function () {

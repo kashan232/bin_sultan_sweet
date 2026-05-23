@@ -199,7 +199,7 @@
 
       @page {
         margin: 0;
-        size: 56mm auto;
+        size: 80mm auto;
       }
 
       html, body {
@@ -211,10 +211,10 @@
       }
 
       .receipt-container {
-        width: 100% !important;
+        width: 74mm !important; /* Printable area for 80mm paper is ~72-76mm */
         max-width: 100% !important;
-        margin: 0 !important;
-        padding: 1mm 0 !important;
+        margin: 0 auto !important;
+        padding: 2mm !important;
         page-break-inside: avoid;
         page-break-after: avoid;
       }
@@ -247,7 +247,7 @@
     }
 
     .page-break {
-      page-break-after: auto;
+      page-break-after: always;
     }
   </style>
 </head>
@@ -315,7 +315,16 @@
 
   {{-- Main Invoice --}}
   @if(in_array($mode, ['invoice', 'token_and_invoice']))
-  <div class="receipt-container">
+  @php
+      $printCopies = (isset($sale->order_type) && strtolower($sale->order_type) == 'takeaway') ? 2 : 1;
+  @endphp
+  @for($c = 0; $c < $printCopies; $c++)
+  <div class="receipt-container @if($c < $printCopies - 1) page-break @endif">
+    @if($printCopies > 1)
+      <div class="center" style="font-size:12px; font-weight:bold; margin-bottom:5px;">
+          {{ $c == 0 ? 'Customer Copy' : 'Bakery Copy' }}
+      </div>
+    @endif
     <!-- Header -->
     <div class="center">
       <img src="{{ asset('assets/images/logo.jpeg') }}" alt="Logo" style="max-height: 80px; margin-bottom: 5px;">
@@ -335,7 +344,7 @@
       </tr>
       <tr>
         <th>Operator Name</th>
-        <td>: {{ $sale->user->name ?? 'Admin' }}</td>
+        <td>: {{ auth()->user()->name ?? 'Admin' }}</td>
       </tr>
       <tr>
         <th>Order Type</th>
@@ -496,6 +505,7 @@
       <p style="margin: 10px 0;">*** Thank you for the visit ***</p>
     </div>
   </div>
+  @endfor
   @endif
 
   <script>
