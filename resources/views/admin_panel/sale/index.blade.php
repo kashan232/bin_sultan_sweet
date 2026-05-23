@@ -12,7 +12,7 @@
         <div class="card-header bg-light text-dark d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-3">
                 <h5 class="mb-0">SALES</h5>
-                @if(auth()->user()->hasRole('Cashier'))
+                @if(auth()->user()->roles->filter(function($role) { return stripos($role->name, 'cashier') !== false; })->isNotEmpty())
                 <div class="badge bg-success fs-6 p-2 shadow-sm">
                     Opening Cash: {{ $fmt($openingBalance ?? 0) }}
                 </div>
