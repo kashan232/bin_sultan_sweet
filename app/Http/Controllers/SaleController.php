@@ -820,6 +820,9 @@ class SaleController extends Controller
             if ($model instanceof \App\Models\Sale) {
                 $returnTo = route('sale.add');
                 $printMode = ($action === 'save_token') ? 'token_only' : 'invoice';
+                if ($action === 'sale' && strtolower($model->order_type ?? '') === 'takeaway') {
+                    $printMode = 'token_and_invoice';
+                }
                 $invoiceUrl = route('sales.invoice', $model->id) . '?return_to=' . urlencode($returnTo) . '&autoprint=1&mode=' . $printMode;
                 return redirect()->to($invoiceUrl)->with('success', $action === 'save_token' ? 'Order Saved.' : 'Sale completed.');
             } else {
@@ -1299,7 +1302,7 @@ class SaleController extends Controller
             $items[] = [
                 'product_id'    => $product->id ?? ($productIdCandidate ?? ''),
                 'variant_id'    => $vIds[$index] ?? null,
-                'item_name'     => $product->item_name ?? (string)($p),
+                'item_name'     => !empty($note_value) ? $note_value : ($product->item_name ?? (string)($p)),
                 'item_code'     => $product->item_code ?? ($itemCodeCandidate ?? ''),
                 'brand'         => $product->brand->name ?? ($brands[$index] ?? ''),
                 'unit'          => $product->unit ?? ($units[$index] ?? ''),

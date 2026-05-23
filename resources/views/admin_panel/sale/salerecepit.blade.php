@@ -96,16 +96,8 @@
 </head>
 <body>
 
-@php
-    $printCopies = (isset($sale->order_type) && strtolower($sale->order_type) == 'takeaway') ? 2 : 1;
-@endphp
-@for($c = 0; $c < $printCopies; $c++)
-<div class="receipt-container @if($c < $printCopies - 1) page-break @endif">
-    @if($printCopies > 1)
-        <div class="center" style="font-size:11px; font-weight:bold; margin-bottom:5px;">
-            {{ $c == 0 ? 'Customer Copy' : 'Bakery Copy' }}
-        </div>
-    @endif
+<div class="receipt-container">
+
     <!-- Header -->
     <div class="center">
         <h2 style="margin:0;font-size:14px;" class="bold">Bin Sultan</h2>
@@ -187,7 +179,6 @@
  ***</p>
     </div>
 </div>
-@endfor
 
 <script>
     window.onload = function () {

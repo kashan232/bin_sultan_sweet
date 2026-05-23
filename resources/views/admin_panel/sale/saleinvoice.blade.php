@@ -315,16 +315,7 @@
 
   {{-- Main Invoice --}}
   @if(in_array($mode, ['invoice', 'token_and_invoice']))
-  @php
-      $printCopies = (isset($sale->order_type) && strtolower($sale->order_type) == 'takeaway') ? 2 : 1;
-  @endphp
-  @for($c = 0; $c < $printCopies; $c++)
-  <div class="receipt-container @if($c < $printCopies - 1) page-break @endif">
-    @if($printCopies > 1)
-      <div class="center" style="font-size:12px; font-weight:bold; margin-bottom:5px;">
-          {{ $c == 0 ? 'Customer Copy' : 'Bakery Copy' }}
-      </div>
-    @endif
+  <div class="receipt-container">
     <!-- Header -->
     <div class="center">
       <img src="{{ asset('assets/images/logo.jpeg') }}" alt="Logo" style="max-height: 80px; margin-bottom: 5px;">
@@ -505,7 +496,6 @@
       <p style="margin: 10px 0;">*** Thank you for the visit ***</p>
     </div>
   </div>
-  @endfor
   @endif
 
   <script>
