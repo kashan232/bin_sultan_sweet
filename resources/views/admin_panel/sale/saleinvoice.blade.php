@@ -52,10 +52,12 @@
 
     /* Receipt Container */
     .receipt-container {
-      width: 80mm;
+      width: 100%;
+      max-width: 80mm; /* Limit on screen, but adapt to smaller screens/printers */
       margin: 0 auto;
-      padding: 5mm 2mm;
+      padding: 2mm;
       background: #fff;
+      overflow: hidden; /* Prevent horizontal overflow */
     }
 
     .center {
@@ -197,18 +199,22 @@
 
       @page {
         margin: 0;
+        size: auto;
       }
 
       html, body {
         margin: 0;
         padding: 0;
+        width: 100%;
         height: auto;
         -webkit-print-color-adjust: exact;
       }
 
       .receipt-container {
-        width: 100%;
-        padding: 2mm;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 2mm 0 !important;
         page-break-inside: avoid;
         page-break-after: avoid;
       }
@@ -216,6 +222,18 @@
       table, tr, td, th, tbody, thead, tfoot {
         page-break-inside: avoid !important;
       }
+      
+      /* Reduce font sizes slightly for print to ensure they fit */
+      body {
+        font-size: 12px;
+      }
+      .store-name { font-size: 18px; }
+      .store-info { font-size: 11px; }
+      .receipt-title { font-size: 16px; }
+      .items-table thead th { font-size: 12px; }
+      .item-row td { font-size: 12px; }
+      .totals-table .grand-total-row th,
+      .totals-table .grand-total-row td { font-size: 16px; }
     }
 
     .page-break {

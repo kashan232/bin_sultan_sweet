@@ -56,13 +56,19 @@
     @media print {
         @page {
             margin: 0;
+            size: auto;
         }
         html, body {
             margin: 0;
             padding: 0;
+            width: 100%;
             height: auto;
         }
         .receipt-container {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 2mm 0 !important;
             page-break-inside: avoid;
             page-break-after: avoid;
         }
