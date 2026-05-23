@@ -199,19 +199,27 @@
         margin: 0;
       }
 
-      body {
+      html, body {
         margin: 0;
+        padding: 0;
+        height: auto;
         -webkit-print-color-adjust: exact;
       }
 
       .receipt-container {
         width: 100%;
         padding: 2mm;
+        page-break-inside: avoid;
+        page-break-after: avoid;
+      }
+      
+      table, tr, td, th, tbody, thead, tfoot {
+        page-break-inside: avoid !important;
       }
     }
 
     .page-break {
-      page-break-after: always;
+      page-break-after: auto;
     }
   </style>
 </head>

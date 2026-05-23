@@ -53,6 +53,23 @@
         border-top: 1px dashed #000;
         padding-top: 4px;
     }
+    @media print {
+        @page {
+            margin: 0;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: auto;
+        }
+        .receipt-container {
+            page-break-inside: avoid;
+            page-break-after: avoid;
+        }
+        table, tr, td, th, tbody, thead, tfoot {
+            page-break-inside: avoid !important;
+        }
+    }
 </style>
 </head>
 <body>
