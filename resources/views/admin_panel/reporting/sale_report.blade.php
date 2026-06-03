@@ -39,12 +39,12 @@
                 <div class="card-body">
                     <form id="SaleFilterForm" class="row g-2 align-items-end">
                         <div class="col-md-3">
-                            <label class="form-label">Start Date</label>
-                            <input type="date" name="start_date" id="start_date" class="form-control" value="{{ date('Y-m-d') }}">
+                            <label class="form-label">Start Date & Time</label>
+                            <input type="datetime-local" name="start_date" id="start_date" class="form-control" value="{{ date('Y-m-d\T00:00') }}">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">End Date</label>
-                            <input type="date" name="end_date" id="end_date" class="form-control" value="{{ date('Y-m-d') }}">
+                            <label class="form-label">End Date & Time</label>
+                            <input type="datetime-local" name="end_date" id="end_date" class="form-control" value="{{ date('Y-m-d\T23:59') }}">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Customer Type</label>

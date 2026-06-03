@@ -639,8 +639,18 @@ class ReportingController extends Controller
                 );
 
             if ($start && $end) {
-                // Precise Date Filtering (Start 00:00:00 to End 23:59:59)
-                $query->whereBetween('sales.created_at', [$start . ' 00:00:00', $end . ' 23:59:59']);
+                // Handle HTML5 datetime-local format (YYYY-MM-DDTHH:mm)
+                $start = str_replace('T', ' ', $start);
+                $end = str_replace('T', ' ', $end);
+                
+                // Append seconds if not present
+                if (strlen($start) == 10) $start .= ' 00:00:00';
+                if (strlen($end) == 10) $end .= ' 23:59:59';
+                
+                if (strlen($start) == 16) $start .= ':00';
+                if (strlen($end) == 16) $end .= ':59';
+
+                $query->whereBetween('sales.created_at', [$start, $end]);
             }
 
             // Filter by Customer Type/Category
@@ -823,7 +833,16 @@ class ReportingController extends Controller
                     'customers.customer_name'
                 )
                 ->when($start && $end, function ($q) use ($start, $end) {
-                     $q->whereBetween('sales.created_at', [$start . ' 00:00:00', $end . ' 23:59:59']);
+                    $start = str_replace('T', ' ', $start);
+                    $end = str_replace('T', ' ', $end);
+                    
+                    if (strlen($start) == 10) $start .= ' 00:00:00';
+                    if (strlen($end) == 10) $end .= ' 23:59:59';
+                    
+                    if (strlen($start) == 16) $start .= ':00';
+                    if (strlen($end) == 16) $end .= ':59';
+
+                    $q->whereBetween('sales.created_at', [$start, $end]);
                 });
 
             // ================== CUSTOMER FILTERING ==================
