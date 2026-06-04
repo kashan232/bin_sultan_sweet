@@ -15,12 +15,12 @@
                 <div class="card-body">
                     <form id="ClosingFilterForm" class="row g-2 align-items-end">
                         <div class="col-md-3">
-                            <label class="form-label fw-bold">Start Date</label>
-                            <input type="date" name="start_date" id="start_date" class="form-control" value="{{ date('Y-m-d') }}">
+                            <label class="form-label fw-bold">Start Date & Time</label>
+                            <input type="datetime-local" name="start_date" id="start_date" class="form-control" value="{{ date('Y-m-d\T00:00') }}">
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label fw-bold">End Date</label>
-                            <input type="date" name="end_date" id="end_date" class="form-control" value="{{ date('Y-m-d') }}">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">End Date & Time</label>
+                            <input type="datetime-local" name="end_date" id="end_date" class="form-control" value="{{ date('Y-m-d\T23:59') }}">
                         </div>
                         @if(auth()->user()->hasRole('Admin'))
                         <div class="col-md-2">

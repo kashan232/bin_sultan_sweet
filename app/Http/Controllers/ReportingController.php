@@ -1523,11 +1523,20 @@ class ReportingController extends Controller
     {
         $start = $request->start_date ?? date('Y-m-d');
         $end   = $request->end_date   ?? date('Y-m-d');
+        
+        $start = str_replace('T', ' ', $start);
+        $end = str_replace('T', ' ', $end);
+        
+        if (strlen($start) == 10) $start .= ' 00:00:00';
+        if (strlen($end) == 10) $end .= ' 23:59:59';
+        if (strlen($start) == 16) $start .= ':00';
+        if (strlen($end) == 16) $end .= ':59';
+
         $userId = $request->user_id;
 
         // 1. Fetch Sales
         $salesQuery = DB::table('sales')
-            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59']);
+            ->whereBetween('created_at', [$start, $end]);
 
         if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
             $salesQuery->where('user_id', auth()->id());
@@ -1581,10 +1590,19 @@ class ReportingController extends Controller
     {
         $start = $request->start_date ?? date('Y-m-d');
         $end   = $request->end_date   ?? date('Y-m-d');
+        
+        $start = str_replace('T', ' ', $start);
+        $end = str_replace('T', ' ', $end);
+        
+        if (strlen($start) == 10) $start .= ' 00:00:00';
+        if (strlen($end) == 10) $end .= ' 23:59:59';
+        if (strlen($start) == 16) $start .= ':00';
+        if (strlen($end) == 16) $end .= ':59';
+
         $userId = $request->user_id;
 
         $salesQuery = DB::table('sales')
-            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59']);
+            ->whereBetween('created_at', [$start, $end]);
 
         if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
             $salesQuery->where('user_id', auth()->id());
