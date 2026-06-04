@@ -60,6 +60,14 @@
         <span>TOTAL SALES (+)</span>
         <span>Rs {{ number_format($totalSale, 0) }}</span>
     </div>
+    <div class="row" style="font-size: 14px; margin-left: 10px;">
+        <span>- CASH</span>
+        <span>Rs {{ number_format($totalCash, 0) }}</span>
+    </div>
+    <div class="row" style="font-size: 14px; margin-left: 10px;">
+        <span>- CARD</span>
+        <span>Rs {{ number_format($totalCard, 0) }}</span>
+    </div>
     <div class="row" style="font-size: 16px; color: #000;">
         <span>TOTAL EXPENSES (-)</span>
         <span>Rs {{ number_format($totalExpense, 0) }}</span>
@@ -68,8 +76,13 @@
     <div class="divider"></div>
 
     <div class="net-box">
-        <div style="font-size: 12px;">NET CASH IN HAND</div>
+        <div style="font-size: 12px;">NET BALANCE (Sales - Exp)</div>
         <div class="bold">Rs {{ number_format($netAmount, 0) }}</div>
+    </div>
+    
+    <div class="net-box" style="border-style: dashed;">
+        <div style="font-size: 12px;">CASH IN DRAWER (Cash - Exp)</div>
+        <div class="bold">Rs {{ number_format($totalCash - $totalExpense, 0) }}</div>
     </div>
 
     <div class="divider"></div>

@@ -1544,11 +1544,19 @@ class ReportingController extends Controller
             $salesQuery->where('user_id', $userId);
         }
 
-        $sales = $salesQuery->select('id', 'invoice_no', 'total_net', 'created_at')
+        $sales = $salesQuery->select('id', 'invoice_no', 'total_net', 'created_at', 'cash', 'card', 'change')
             ->orderBy('created_at', 'asc')
             ->get();
 
         $totalSale = $sales->sum('total_net');
+        
+        $totalCash = $sales->sum(function($s) {
+            return floatval($s->cash) - floatval($s->change);
+        });
+        
+        $totalCard = $sales->sum(function($s) {
+            return floatval($s->card);
+        });
 
         // 2. Fetch Expenses
         $expenseQuery = DB::table('expense_vouchers')
@@ -1579,6 +1587,8 @@ class ReportingController extends Controller
             'sales' => $sales,
             'expenses' => $processedExpenses,
             'total_sale' => $totalSale,
+            'total_cash' => $totalCash,
+            'total_card' => $totalCard,
             'total_expense' => $totalExpense,
             'net_amount' => $totalSale - $totalExpense,
             'start_date' => $start,
@@ -1610,10 +1620,18 @@ class ReportingController extends Controller
             $salesQuery->where('user_id', $userId);
         }
 
-        $sales = $salesQuery->select('id', 'invoice_no', 'total_net', 'created_at')
+        $sales = $salesQuery->select('id', 'invoice_no', 'total_net', 'created_at', 'cash', 'card', 'change')
             ->get();
 
         $totalSale = $sales->sum('total_net');
+        
+        $totalCash = $sales->sum(function($s) {
+            return floatval($s->cash) - floatval($s->change);
+        });
+        
+        $totalCard = $sales->sum(function($s) {
+            return floatval($s->card);
+        });
 
         $expenseQuery = DB::table('expense_vouchers')
             ->whereBetween('date', [$start, $end]);
@@ -1642,6 +1660,8 @@ class ReportingController extends Controller
 
         return view('admin_panel.reporting.sale_closing_print', [
             'totalSale' => $totalSale,
+            'totalCash' => $totalCash,
+            'totalCard' => $totalCard,
             'totalExpense' => $totalExpense,
             'netAmount' => $totalSale - $totalExpense,
             'startDate' => $start,

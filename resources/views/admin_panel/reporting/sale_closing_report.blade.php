@@ -49,29 +49,52 @@
                 </div>
             </div>
 
-            <!-- Summary Cards -->
             <div class="row mb-3">
-                <div class="col-md-4">
+                <div class="col-md-2">
                     <div class="card bg-success text-white">
                         <div class="card-body py-3">
                             <h6 class="mb-1 text-white">Total Sales (+)</h6>
-                            <h3 class="mb-0 text-white" id="summarySale">Rs 0</h3>
+                            <h4 class="mb-0 text-white" id="summarySale">Rs 0</h4>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
+                    <div class="card bg-info text-white">
+                        <div class="card-body py-3">
+                            <h6 class="mb-1 text-white">Cash (+)</h6>
+                            <h4 class="mb-0 text-white" id="summaryCash">Rs 0</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="card bg-warning text-dark">
+                        <div class="card-body py-3">
+                            <h6 class="mb-1 text-dark">Card (+)</h6>
+                            <h4 class="mb-0 text-dark" id="summaryCard">Rs 0</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
                     <div class="card bg-danger text-white">
                         <div class="card-body py-3">
-                            <h6 class="mb-1 text-white">Total Expenses (-)</h6>
-                            <h3 class="mb-0 text-white" id="summaryExpense">Rs 0</h3>
+                            <h6 class="mb-1 text-white">Expenses (-)</h6>
+                            <h4 class="mb-0 text-white" id="summaryExpense">Rs 0</h4>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
                     <div class="card bg-primary text-white">
                         <div class="card-body py-3">
-                            <h6 class="mb-1 text-white">Net Cash (Grand Total)</h6>
-                            <h3 class="mb-0 text-white" id="summaryNet">Rs 0</h3>
+                            <h6 class="mb-1 text-white">Net Balance (Sales - Exp)</h6>
+                            <h4 class="mb-0 text-white" id="summaryNet">Rs 0</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="card bg-secondary text-white">
+                        <div class="card-body py-3">
+                            <h6 class="mb-1 text-white">Cash in Drawer</h6>
+                            <h4 class="mb-0 text-white" id="summaryDrawer">Rs 0</h4>
                         </div>
                     </div>
                 </div>
@@ -155,8 +178,17 @@
                     
                     // Summary
                     $('#summarySale').text('Rs ' + res.total_sale.toLocaleString());
+                    $('#summaryCash').text('Rs ' + res.total_cash.toLocaleString());
+                    $('#summaryCard').text('Rs ' + res.total_card.toLocaleString());
                     $('#summaryExpense').text('Rs ' + res.total_expense.toLocaleString());
+                    // Net Cash might mean different things. We usually assume Net Cash = Total Cash - Expenses.
+                    // But currently it's Total Sale - Total Expense.
+                    // We will keep it as res.net_amount but maybe the user considers Net Cash = Cash - Expense?
+                    // Let's stick to res.net_amount which is total_sale - total_expense
                     $('#summaryNet').text('Rs ' + res.net_amount.toLocaleString());
+                    
+                    let drawerAmount = res.total_cash - res.total_expense;
+                    $('#summaryDrawer').text('Rs ' + drawerAmount.toLocaleString());
 
                     // Sales Table
                     let saleHtml = "";
