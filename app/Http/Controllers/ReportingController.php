@@ -1560,7 +1560,7 @@ class ReportingController extends Controller
 
         // 2. Fetch Expenses
         $expenseQuery = DB::table('expense_vouchers')
-            ->whereBetween('date', [$start, $end]);
+            ->whereBetween('created_at', [$start, $end]);
 
         if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
             $expenseQuery->where('user_id', auth()->id());
@@ -1634,7 +1634,7 @@ class ReportingController extends Controller
         });
 
         $expenseQuery = DB::table('expense_vouchers')
-            ->whereBetween('date', [$start, $end]);
+            ->whereBetween('created_at', [$start, $end]);
 
         if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
             $expenseQuery->where('user_id', auth()->id());
