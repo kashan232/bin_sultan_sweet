@@ -1548,15 +1548,24 @@ class ReportingController extends Controller
             ->orderBy('created_at', 'asc')
             ->get();
 
-        $totalSale = $sales->sum('total_net');
+        $totalSale = 0;
+        $totalCash = 0;
+        $totalCard = 0;
         
-        $totalCash = $sales->sum(function($s) {
-            return floatval($s->cash) - floatval($s->change);
-        });
-        
-        $totalCard = $sales->sum(function($s) {
-            return floatval($s->card);
-        });
+        foreach ($sales as $s) {
+            $net = floatval($s->total_net);
+            $crd = floatval($s->card);
+            
+            // Card taken cannot exceed the net bill
+            $actualCard = min($net, $crd);
+            
+            // The rest of the bill is assumed to be paid in cash
+            $actualCash = $net - $actualCard;
+            
+            $totalSale += $net;
+            $totalCard += $actualCard;
+            $totalCash += $actualCash;
+        }
 
         // 2. Fetch Expenses
         $expenseQuery = DB::table('expense_vouchers')
@@ -1623,15 +1632,21 @@ class ReportingController extends Controller
         $sales = $salesQuery->select('id', 'invoice_no', 'total_net', 'created_at', 'cash', 'card', 'change')
             ->get();
 
-        $totalSale = $sales->sum('total_net');
+        $totalSale = 0;
+        $totalCash = 0;
+        $totalCard = 0;
         
-        $totalCash = $sales->sum(function($s) {
-            return floatval($s->cash) - floatval($s->change);
-        });
-        
-        $totalCard = $sales->sum(function($s) {
-            return floatval($s->card);
-        });
+        foreach ($sales as $s) {
+            $net = floatval($s->total_net);
+            $crd = floatval($s->card);
+            
+            $actualCard = min($net, $crd);
+            $actualCash = $net - $actualCard;
+            
+            $totalSale += $net;
+            $totalCard += $actualCard;
+            $totalCash += $actualCash;
+        }
 
         $expenseQuery = DB::table('expense_vouchers')
             ->whereBetween('created_at', [$start, $end]);
