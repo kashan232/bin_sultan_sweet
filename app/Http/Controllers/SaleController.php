@@ -283,10 +283,22 @@ class SaleController extends Controller
         $products = $query->orderBy('item_name')->paginate($perPage);
 
         $items = $products->getCollection()->map(function ($product) {
-            $price = (float) $product->price;
-            if ($product->activeDiscount) {
-                $price = (float) ($product->activeDiscount->final_price ?? $price);
+            // ─── Price Resolution ───────────────────────────────────────────
+            // اگر product کی خود کی price 0 یا خالی ہو تو variants سے لیں
+            $rawPrice = (float) $product->price;
+            if ($rawPrice <= 0 && $product->variants->count() > 0) {
+                // پہلے default variant تلاش کریں
+                $defaultVariant = $product->variants->firstWhere('is_default', true)
+                    ?? $product->variants->first();
+                $rawPrice = (float) ($defaultVariant->price ?? 0);
             }
+
+            $price = $rawPrice;
+            if ($product->activeDiscount) {
+                $price = (float) ($product->activeDiscount->final_price ?? $rawPrice);
+            }
+            // ────────────────────────────────────────────────────────────────
+
             $stock    = (float) ($product->total_stock ?? 0);
             $imageUrl = $product->image
                 ? asset('uploads/products/' . $product->image)
@@ -302,7 +314,7 @@ class SaleController extends Controller
                 'unit_id'          => $product->unit_id,
                 'note'             => $product->note ?? '',
                 'price'            => $price,
-                'original_price'   => (float) $product->price,
+                'original_price'   => $rawPrice,
                 'has_discount'     => $product->activeDiscount ? true : false,
                 'discount_percent' => $product->activeDiscount?->discount_percentage ?? 0,
                 'stock'            => $stock,

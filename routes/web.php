@@ -99,6 +99,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/products/{id}/edit', [ProductController::class, 'edit'])->name('products.edit');
     Route::get('/barcode/{id}', [ProductController::class, 'barcode'])->name('product.barcode');
     Route::get('/get-all-products-for-search', [ProductController::class, 'getAllProductsForSearch'])->name('get-all-products-for-search');
+    Route::post('/products/reset-stock', [ProductController::class, 'resetStock'])->name('products.reset_stock');
 
     Route::prefix('discount')->group(function () {
         Route::get('/', [DiscountController::class, 'index'])->name('discount.index')->middleware('permission:Discount Products');

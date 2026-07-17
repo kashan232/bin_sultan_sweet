@@ -44,6 +44,15 @@
 
         </div>
         <div class="d-flex justify-content-between align-items-end gap-1">
+            @if (auth()->user()->email === 'admin@admin.com')
+            <button class="btn btn-danger btn-sm text-center" onclick="confirmResetStock()">
+                🔥 Reset All Stock
+            </button>
+            <form id="resetStockForm" action="{{ route('products.reset_stock') }}" method="POST" style="display:none;">
+                @csrf
+            </form>
+            @endif
+
             @if (auth()->user()->can(' Discount.index') || auth()->user()->email === 'admin@admin.com')
             <a href="{{ route('discount.index') }}" class="btn btn-success btn-sm">
                 View Discount
@@ -600,6 +609,23 @@
         });
 
     })();
+
+    function confirmResetStock() {
+        Swal.fire({
+            title: 'Are you sure?',
+            text: "This will set all stocks (including initial stocks and variants) to zero! Sales, purchases, and ledger history will NOT be deleted or affected.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, reset all stock!',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                document.getElementById('resetStockForm').submit();
+            }
+        });
+    }
 </script>
 
 

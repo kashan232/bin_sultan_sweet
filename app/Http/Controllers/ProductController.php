@@ -565,4 +565,50 @@ class ProductController extends Controller
 
         return response()->json($results);
     }
+
+    public function resetStock(Request $request)
+    {
+        if (!Auth::check() || Auth::user()->email !== 'admin@admin.com') {
+            return redirect()->back()->with('error', 'Unauthorized! Only Admin can perform this action.');
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // 1. Reset all stock values in stocks table
+            DB::table('stocks')->update([
+                'qty' => 0,
+                'reserved_qty' => 0,
+                'updated_at' => now()
+            ]);
+
+            // 2. Reset all stock values in warehouse_stocks table
+            DB::table('warehouse_stocks')->update([
+                'quantity' => 0,
+                'updated_at' => now()
+            ]);
+
+            // 3. Reset all stock values in product_variants table
+            DB::table('product_variants')->update([
+                'stock_qty' => 0,
+                'updated_at' => now()
+            ]);
+
+            // 4. Reset initial_stock in products table
+            DB::table('products')->update([
+                'initial_stock' => 0,
+                'updated_at' => now()
+            ]);
+
+            // 5. Store reset timestamp in storage to filter stock reports
+            \Illuminate\Support\Facades\Storage::put('stock_reset_timestamp.txt', now()->toDateTimeString());
+
+            DB::commit();
+
+            return redirect()->back()->with('success', 'All stock records have been reset to zero successfully! Sales, purchases, and ledgers remain unaffected.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->with('error', 'Failed to reset stock: ' . $e->getMessage());
+        }
+    }
 }

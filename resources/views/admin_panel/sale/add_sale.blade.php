@@ -335,6 +335,7 @@
 <script>
 const POS_URL     = "{{ route('pos.products') }}";
 const VAR_URL     = "{{ url('/pos/product-variants') }}";
+const CURRENT_USER_ID = {{ auth()->id() }}; // ہر user کا unique ID
 
 let cart     = [];
 let curProd  = null;
@@ -370,9 +371,24 @@ document.getElementById('szModal').addEventListener('click', function(e){ if(e.t
 document.getElementById('bkModal').addEventListener('click', function(e){ if(e.target===this) hideModal('bkModal'); });
 document.getElementById('tableModal').addEventListener('click', function(e){ if(e.target===this) hideModal('tableModal'); });
 
+/* ---- ORDER TYPE PREFERENCE (per-user localStorage) ---- */
+const ORDER_TYPE_KEY = 'pos_order_type_user_' + CURRENT_USER_ID;
+
+function saveOrderTypePref(type) {
+    try { localStorage.setItem(ORDER_TYPE_KEY, type); } catch(e) {}
+}
+
+function loadOrderTypePref() {
+    try { return localStorage.getItem(ORDER_TYPE_KEY) || 'Walk-in'; } catch(e) { return 'Walk-in'; }
+}
+
 /* ---- SPECIFIC FUNCS FOR ORDER TYPE ---- */
-function handleOrderTypeChange() {
+function handleOrderTypeChange(saveToStorage) {
     let orderType = document.getElementById('orderTypeSel').value;
+    // صرف جب user خود change کرے تو save کریں (page load پر نہیں)
+    if (saveToStorage !== false) {
+        saveOrderTypePref(orderType);
+    }
     if (orderType === 'Dine-in') {
         showModal('tableModal');
         document.getElementById('btnSaveToken').style.display = 'flex';
@@ -609,6 +625,17 @@ document.querySelectorAll('.cat-tab').forEach(function(t) {
 
 loadProds(true);
 
+/* ---- PAGE INIT: Restore saved order type for this user ---- */
+(function restoreOrderType() {
+    const saved = loadOrderTypePref();
+    const sel = document.getElementById('orderTypeSel');
+    if (saved && sel) {
+        sel.value = saved;
+        // false = page load ہے، localStorage میں save نہ کریں
+        handleOrderTypeChange(false);
+    }
+})();
+
 
 /* ---- CLICK HANDLER (allow out of stock) ---- */
 function handleClick(p) {
@@ -744,6 +771,12 @@ function openSzModal(p) {
         curProd.variants = data.variants; 
         renderSizes(data.variants); 
         document.getElementById('szTitle').innerHTML = '📦 Size — ' + data.item_name + ' <small class="badge bg-dark ms-2" style="font-size:11px">Avail: ' + fmtStk(data.total_stock, data.unit_type) + '</small>';
+        
+        // ⌨️ Focus on qty field
+        setTimeout(function() {
+            const qEl = document.getElementById('mQty');
+            if (qEl) { qEl.focus(); qEl.select(); }
+        }, 80);
     })
     .catch(()=>{ document.getElementById('szGrid').innerHTML='<p class="text-danger">Size load failed.</p>'; });
 }
@@ -814,6 +847,12 @@ function selectSz(el, i, v) {
             hPriceVal.dispatchEvent(new Event('input'));
         }
     }
+
+    // ⌨️ size select karne per auto focus aur select mQty
+    setTimeout(function() {
+        const qEl = document.getElementById('mQty');
+        if (qEl) { qEl.focus(); qEl.select(); }
+    }, 50);
 }
 
 function openSingleModal(p) {
@@ -822,6 +861,11 @@ function openSingleModal(p) {
     document.getElementById('mLabel').value=p.item_name; document.getElementById('mQty').value=1;
     document.getElementById('mPrice').value=p.price; document.getElementById('mDisc').value=0;
     showModal('szModal');
+    // ⌨️ Modal کھلنے پر qty field پر focus
+    setTimeout(function() {
+        const qEl = document.getElementById('mQty');
+        if (qEl) { qEl.focus(); qEl.select(); }
+    }, 80);
 }
 
 /* ---- ADD TO ORDER ---- */
@@ -883,6 +927,13 @@ function addToOrder() {
     ol.style.transition = 'none';
     ol.style.background = '#e8f5e9';
     setTimeout(function() { ol.style.transition = 'background .6s'; ol.style.background = ''; }, 100);
+
+    // ⌨️ Product add ہونے کے بعد Cash field پر focus
+    setTimeout(function() {
+        const cashEl = document.getElementById('cashI');
+        if (cashEl) { cashEl.focus(); cashEl.select(); }
+        kbState = 'cash'; // keyboard state reset
+    }, 120);
 }
 
 /* ---- CART ---- */
@@ -1117,7 +1168,89 @@ function n2w(n){
     s+= +m[4]?(a[+m[4]]||(b[m[4][0]]+' '+a[m[4][1]])) :'';
     return s.trim()+' Rupees Only';
 }
-document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();doSale();} });
+/* ========================================================
+   ⌨️  KEYBOARD FLOW
+   ─────────────────────────────────────────────────────────
+   Modal کھلے    → qty focus (openSingleModal / renderSizes)
+   qty → Enter  → addToOrder()
+   price → Enter → qty focus
+   ─────────────────────────────────────────────────────────
+   Cart میں products ہوں:
+   cashI → Enter → cardI focus
+   cardI → Enter → Sale button pulse/highlight
+   Sale highlighted + Enter → doSale()
+   ─────────────────────────────────────────────────────────
+   Ctrl+S → ہمیشہ doSale()
+   ======================================================== */
+
+let kbState = 'idle'; // 'idle' | 'cash' | 'card' | 'sale-ready'
+
+// Modal fields: price → qty → Enter = addToOrder
+document.getElementById('mPrice').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const qEl = document.getElementById('mQty');
+        if (qEl) { qEl.focus(); qEl.select(); }
+    }
+});
+
+document.getElementById('mQty').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        addToOrder();
+    }
+});
+
+// Cash → Enter → Card
+document.getElementById('cashI').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const cardEl = document.getElementById('cardI');
+        if (cardEl) { cardEl.focus(); cardEl.select(); }
+        kbState = 'card';
+    }
+});
+
+// Card → Enter → Sale button highlight + next Enter = doSale
+document.getElementById('cardI').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        if (!cart.length) { toast('Koi product nahi add kiya'); return; }
+        // Sale button کو highlight کریں
+        const btnSale = document.getElementById('btnSale');
+        btnSale.style.transform = 'scale(1.06)';
+        btnSale.style.boxShadow = '0 0 0 4px rgba(39,174,96,.55)';
+        btnSale.focus();
+        kbState = 'sale-ready';
+    }
+});
+
+// Sale button پر Enter → doSale
+document.getElementById('btnSale').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        this.style.transform = '';
+        this.style.boxShadow = '';
+        kbState = 'idle';
+        doSale();
+    }
+});
+
+// Sale button کا blur reset
+document.getElementById('btnSale').addEventListener('blur', function() {
+    this.style.transform = '';
+    this.style.boxShadow = '';
+    if (kbState === 'sale-ready') kbState = 'idle';
+});
+
+// Global: Ctrl+S → doSale
+document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        doSale();
+    }
+});
+
 recalc();
 
 // Set proper heights dynamically based on actual layout

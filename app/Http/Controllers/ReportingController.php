@@ -33,6 +33,12 @@ class ReportingController extends Controller
         $startDT = $startDate . ' 00:00:00';
         $endDT   = $endDate   . ' 23:59:59';
 
+        // Check if there is a stock reset timestamp
+        $resetTime = null;
+        if (\Illuminate\Support\Facades\Storage::exists('stock_reset_timestamp.txt')) {
+            $resetTime = trim(\Illuminate\Support\Facades\Storage::get('stock_reset_timestamp.txt'));
+        }
+
         // 1. Get products and their variants
         $pQuery = Product::with(['variants', 'unit'])->orderBy('item_name');
 
@@ -49,28 +55,37 @@ class ReportingController extends Controller
         $productIds = $products->pluck('id')->toArray();
 
         // 2. Bulk queries grouped by product_id AND variant_id with DATE filters
-        $purchases = DB::table('purchase_items')
+        $purchasesQuery = DB::table('purchase_items')
             ->join('purchases', 'purchases.id', '=', 'purchase_items.purchase_id')
             ->whereIn('purchase_items.product_id', $productIds)
-            ->whereBetween('purchases.purchase_date', [$startDate, $endDate])
-            ->select('purchase_items.product_id', 'purchase_items.variant_id', DB::raw('SUM(purchase_items.qty) as total_qty'))
+            ->whereBetween('purchases.purchase_date', [$startDate, $endDate]);
+        if ($resetTime) {
+            $purchasesQuery->where('purchases.created_at', '>=', $resetTime);
+        }
+        $purchases = $purchasesQuery->select('purchase_items.product_id', 'purchase_items.variant_id', DB::raw('SUM(purchase_items.qty) as total_qty'))
             ->groupBy('purchase_items.product_id', 'purchase_items.variant_id')
             ->get();
 
-        $productions = DB::table('production_entry_items')
+        $productionsQuery = DB::table('production_entry_items')
             ->join('production_entries', 'production_entries.id', '=', 'production_entry_items.production_entry_id')
             ->whereIn('production_entry_items.product_id', $productIds)
             ->whereDate('production_entries.production_date', '>=', $startDate)
-            ->whereDate('production_entries.production_date', '<=', $endDate)
-            ->select('production_entry_items.product_id', 'production_entry_items.variant_id', DB::raw('SUM(production_entry_items.qty_stock) as total_qty'))
+            ->whereDate('production_entries.production_date', '<=', $endDate);
+        if ($resetTime) {
+            $productionsQuery->where('production_entries.created_at', '>=', $resetTime);
+        }
+        $productions = $productionsQuery->select('production_entry_items.product_id', 'production_entry_items.variant_id', DB::raw('SUM(production_entry_items.qty_stock) as total_qty'))
             ->groupBy('production_entry_items.product_id', 'production_entry_items.variant_id')
             ->get();
 
-        $purchaseReturns = DB::table('purchase_return_items')
+        $purchaseReturnsQuery = DB::table('purchase_return_items')
             ->join('purchase_returns', 'purchase_returns.id', '=', 'purchase_return_items.purchase_return_id')
             ->whereIn('purchase_return_items.product_id', $productIds)
-            ->whereBetween('purchase_returns.return_date', [$startDate, $endDate])
-            ->select('purchase_return_items.product_id', DB::raw('SUM(purchase_return_items.qty) as total_qty'))
+            ->whereBetween('purchase_returns.return_date', [$startDate, $endDate]);
+        if ($resetTime) {
+            $purchaseReturnsQuery->where('purchase_returns.created_at', '>=', $resetTime);
+        }
+        $purchaseReturns = $purchaseReturnsQuery->select('purchase_return_items.product_id', DB::raw('SUM(purchase_return_items.qty) as total_qty'))
             ->groupBy('purchase_return_items.product_id')
             ->get();
 
@@ -91,6 +106,9 @@ class ReportingController extends Controller
         $allSalesQuery = DB::table('sales')->whereBetween('created_at', [$startDT, $endDT])->whereNotNull('product')->select('product', 'qty');
         if ($hasVariantIdInSales) {
             $allSalesQuery->addSelect('variant_id');
+        }
+        if ($resetTime) {
+            $allSalesQuery->where('created_at', '>=', $resetTime);
         }
         $allSales = $allSalesQuery->get();
 
@@ -115,6 +133,9 @@ class ReportingController extends Controller
         if ($hasVariantIdInReturns) {
             $allReturnsQuery->addSelect('variant_id');
         }
+        if ($resetTime) {
+            $allReturnsQuery->where('created_at', '>=', $resetTime);
+        }
         $allReturns = $allReturnsQuery->get();
 
         $retMap = [];
@@ -134,35 +155,47 @@ class ReportingController extends Controller
         }
 
         // 3. Transactions AFTER end_date to perform backward calculation for Balance
-        $purchAfter = DB::table('purchase_items')
+        $purchAfterQuery = DB::table('purchase_items')
             ->join('purchases', 'purchases.id', '=', 'purchase_items.purchase_id')
             ->whereIn('purchase_items.product_id', $productIds)
-            ->where('purchases.purchase_date', '>', $endDate)
-            ->select('purchase_items.product_id', 'purchase_items.variant_id', DB::raw('SUM(purchase_items.qty) as total_qty'))
+            ->where('purchases.purchase_date', '>', $endDate);
+        if ($resetTime) {
+            $purchAfterQuery->where('purchases.created_at', '>=', $resetTime);
+        }
+        $purchAfter = $purchAfterQuery->select('purchase_items.product_id', 'purchase_items.variant_id', DB::raw('SUM(purchase_items.qty) as total_qty'))
             ->groupBy('purchase_items.product_id', 'purchase_items.variant_id')
             ->get();
         $mapPAft = []; foreach($purchAfter as $p) { $mapPAft[$p->product_id . '_' . ($p->variant_id ?? '0')] = $p->total_qty; }
 
-        $prodAfter = DB::table('production_entry_items')
+        $prodAfterQuery = DB::table('production_entry_items')
             ->join('production_entries', 'production_entries.id', '=', 'production_entry_items.production_entry_id')
             ->whereIn('production_entry_items.product_id', $productIds)
-            ->whereDate('production_entries.production_date', '>', $endDate)
-            ->select('production_entry_items.product_id', 'production_entry_items.variant_id', DB::raw('SUM(production_entry_items.qty_stock) as total_qty'))
+            ->whereDate('production_entries.production_date', '>', $endDate);
+        if ($resetTime) {
+            $prodAfterQuery->where('production_entries.created_at', '>=', $resetTime);
+        }
+        $prodAfter = $prodAfterQuery->select('production_entry_items.product_id', 'production_entry_items.variant_id', DB::raw('SUM(production_entry_items.qty_stock) as total_qty'))
             ->groupBy('production_entry_items.product_id', 'production_entry_items.variant_id')
             ->get();
         $mapProdAft = []; foreach($prodAfter as $pd) { $mapProdAft[$pd->product_id . '_' . ($pd->variant_id ?? 0)] = ($mapProdAft[$pd->product_id . '_' . ($pd->variant_id ?? 0)] ?? 0) + $pd->total_qty; }
 
-        $prAfter = DB::table('purchase_return_items')
+        $prAfterQuery = DB::table('purchase_return_items')
             ->join('purchase_returns', 'purchase_returns.id', '=', 'purchase_return_items.purchase_return_id')
             ->whereIn('purchase_return_items.product_id', $productIds)
-            ->where('purchase_returns.return_date', '>', $endDate)
-            ->select('purchase_return_items.product_id', DB::raw('SUM(purchase_return_items.qty) as total_qty'))
+            ->where('purchase_returns.return_date', '>', $endDate);
+        if ($resetTime) {
+            $prAfterQuery->where('purchase_returns.created_at', '>=', $resetTime);
+        }
+        $prAfter = $prAfterQuery->select('purchase_return_items.product_id', DB::raw('SUM(purchase_return_items.qty) as total_qty'))
             ->groupBy('purchase_return_items.product_id')
             ->get();
         $mapPRAft = []; foreach($prAfter as $pr) { $mapPRAft[$pr->product_id . '_0'] = ($mapPRAft[$pr->product_id . '_0'] ?? 0) + $pr->total_qty; }
 
         $allSalesAfterQ = DB::table('sales')->where('created_at', '>', $endDT)->whereNotNull('product')->select('product', 'qty');
         if ($hasVariantIdInSales) { $allSalesAfterQ->addSelect('variant_id'); }
+        if ($resetTime) {
+            $allSalesAfterQ->where('created_at', '>=', $resetTime);
+        }
         $allSalesAfter = $allSalesAfterQ->get();
         
         $soldAftMap = [];
@@ -178,6 +211,9 @@ class ReportingController extends Controller
 
         $allRetAfterQ = DB::table('sales_returns')->where('created_at', '>', $endDT)->whereNotNull('product')->select('product', 'qty');
         if ($hasVariantIdInReturns) { $allRetAfterQ->addSelect('variant_id'); }
+        if ($resetTime) {
+            $allRetAfterQ->where('created_at', '>=', $resetTime);
+        }
         $allRetAfter = $allRetAfterQ->get();
         
         $retAftMap = [];
@@ -192,11 +228,14 @@ class ReportingController extends Controller
         }
 
         // ---- STOCK ADJUSTMENTS within date range ----
-        $adjInRange = DB::table('stock_adjustment_items as sai')
+        $adjInRangeQuery = DB::table('stock_adjustment_items as sai')
             ->join('stock_adjustments as sa', 'sa.id', '=', 'sai.adjustment_id')
             ->whereIn('sai.product_id', $productIds)
-            ->whereBetween('sa.adjustment_date', [$startDate, $endDate])
-            ->select('sai.product_id', 'sa.type', DB::raw('SUM(sai.qty_stock) as total_qty'))
+            ->whereBetween('sa.adjustment_date', [$startDate, $endDate]);
+        if ($resetTime) {
+            $adjInRangeQuery->where('sa.created_at', '>=', $resetTime);
+        }
+        $adjInRange = $adjInRangeQuery->select('sai.product_id', 'sa.type', DB::raw('SUM(sai.qty_stock) as total_qty'))
             ->groupBy('sai.product_id', 'sa.type')
             ->get();
 
@@ -212,11 +251,14 @@ class ReportingController extends Controller
         }
 
         // ---- STOCK ADJUSTMENTS AFTER end_date ----
-        $adjAfter = DB::table('stock_adjustment_items as sai')
+        $adjAfterQuery = DB::table('stock_adjustment_items as sai')
             ->join('stock_adjustments as sa', 'sa.id', '=', 'sai.adjustment_id')
             ->whereIn('sai.product_id', $productIds)
-            ->where('sa.adjustment_date', '>', $endDate)
-            ->select('sai.product_id', 'sa.type', DB::raw('SUM(sai.qty_stock) as total_qty'))
+            ->where('sa.adjustment_date', '>', $endDate);
+        if ($resetTime) {
+            $adjAfterQuery->where('sa.created_at', '>=', $resetTime);
+        }
+        $adjAfter = $adjAfterQuery->select('sai.product_id', 'sa.type', DB::raw('SUM(sai.qty_stock) as total_qty'))
             ->groupBy('sai.product_id', 'sa.type')
             ->get();
 
@@ -277,6 +319,11 @@ class ReportingController extends Controller
                     
                     $closingStock = $balance - $purchAft - $prodAft - $sRetAft + $soldAft + $prAft - $adjIncAft + $adjDecAft;
                     $openingStock = $closingStock - $purchased - $produced - $sReturn + $sold + $pReturn - $adjInc + $adjDec;
+
+                    if ($balance <= 0) {
+                        $closingStock = 0;
+                        $openingStock = 0;
+                    }
 
                     $rows[] = [
                         'item_code'       => $code,
@@ -375,6 +422,11 @@ class ReportingController extends Controller
 
                 $closingStock = $balance - $purchAft - $prodAft - $sRetAft + $soldAft + $prAft - $adjIncAft + $adjDecAft;
                 $openingStock = $closingStock - $purchased - $produced - $sReturn + $sold + $pReturn - $adjInc + $adjDec;
+
+                if ($balance <= 0) {
+                    $closingStock = 0;
+                    $openingStock = 0;
+                }
 
                 $rows[] = [
                     'item_code'       => $code,
