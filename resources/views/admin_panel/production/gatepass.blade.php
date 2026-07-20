@@ -10,13 +10,13 @@
     @media print {
         body { margin: 0; padding: 0; }
         .no-print { display: none !important; }
-        @page { size: 80mm auto; margin: 0; }
+        @page { size: 80mm auto; margin: 2mm; }
     }
     
     body {
         font-family: 'Arial', sans-serif;
-        font-size: 13px;
-        color: #000 !important; /* Pure black */
+        font-size: 11px;
+        color: #000 !important;
         background: #fff;
         margin: 0;
         padding: 0;
@@ -24,42 +24,41 @@
     
     .receipt {
         width: 100%;
-        max-width: 290px; /* Safe width for 80mm receipt, prevents side cuts */
+        max-width: 240px;
         margin: 0 auto;
-        padding: 10px 8px; /* Safe padding */
+        padding: 6px 4px;
     }
     
     .center { text-align: center; }
-    .bold { font-weight: 900 !important; } /* Extra bold for thermal print */
+    .bold { font-weight: 900 !important; }
     
-    .line { border-top: 1.5px dashed #000; margin: 7px 0; }
-    .dbl-line { border-top: 2px solid #000; border-bottom: 2px solid #000; height: 3px; margin: 7px 0; }
+    .line { border-top: 1px dashed #000; margin: 4px 0; }
+    .dbl-line { border-top: 1.5px solid #000; border-bottom: 1.5px solid #000; height: 2px; margin: 4px 0; }
     
-    .brand { font-size: 20px; font-weight: 900; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .address { font-size: 12px; font-weight: 900; line-height: 1.3; }
-    .title { font-size: 16px; font-weight: 900; margin: 10px 0; text-transform: uppercase; letter-spacing: 1px; }
+    .brand { font-size: 14px; font-weight: 900; margin-bottom: 1px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .address { font-size: 9px; font-weight: 900; line-height: 1.2; }
+    .title { font-size: 11px; font-weight: 900; margin: 6px 0; text-transform: uppercase; letter-spacing: 0.5px; }
     
-    table { width: 100%; border-collapse: collapse; margin: 5px 0; }
-    th { text-align: left; font-size: 14px; font-weight: 900; border-bottom: 2px solid #000; padding: 5px 2px; }
-    td { font-size: 14px; font-weight: 900; padding: 6px 2px; vertical-align: top; border-bottom: 1.5px dotted #000; }
+    table { width: 100%; border-collapse: collapse; margin: 3px 0; }
+    th { text-align: left; font-size: 10px; font-weight: 900; border-bottom: 1.5px solid #000; padding: 3px 1px; }
+    td { font-size: 10px; font-weight: 900; padding: 3px 1px; vertical-align: top; border-bottom: 1px dotted #000; }
     
-    /* Remove bottom border from last td */
     table tbody tr:last-child td { border-bottom: none; }
     
     .r { text-align: right; }
-    .info-row { display: flex; justify-content: space-between; font-size: 13px; margin: 4px 0; font-weight: 900; }
+    .info-row { display: flex; justify-content: space-between; font-size: 10px; margin: 2px 0; font-weight: 900; }
     
-    .sig-area { display: flex; justify-content: space-between; margin-top: 45px; font-size: 12px; font-weight: 900; padding: 0 5px; }
-    .sig-box { text-align: center; width: 30%; border-top: 1.5px dashed #000; padding-top: 5px; }
+    .sig-area { display: flex; justify-content: space-between; margin-top: 30px; font-size: 9px; font-weight: 900; padding: 0 3px; }
+    .sig-box { text-align: center; width: 30%; border-top: 1px dashed #000; padding-top: 3px; }
     
     .print-btn {
-        display: block; margin: 15px auto; padding: 12px 30px;
-        background: #000; color: #fff; border: none; border-radius: 6px;
-        font-size: 16px; font-weight: 900; cursor: pointer; text-transform: uppercase;
+        display: block; margin: 10px auto; padding: 8px 20px;
+        background: #000; color: #fff; border: none; border-radius: 5px;
+        font-size: 13px; font-weight: 900; cursor: pointer; text-transform: uppercase;
     }
     
-    .item-name { font-size: 14px; font-weight: 900; line-height: 1.2; margin-bottom: 2px; }
-    .item-code { font-size: 12px; font-weight: 900; } /* Pure black bold, no grey */
+    .item-name { font-size: 10px; font-weight: 900; line-height: 1.1; margin-bottom: 1px; }
+    .item-code { font-size: 9px; font-weight: 900; }
 </style>
 </head>
 <body>

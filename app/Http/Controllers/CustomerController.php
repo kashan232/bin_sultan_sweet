@@ -83,6 +83,7 @@ class CustomerController extends Controller
         ]);
 
         // Customer create
+        $data['opening_balance'] = $data['opening_balance'] ?? 0;
         $customer = Customer::create($data);
 
         // Ledger me entry agar opening balance dia gaya ho
@@ -123,6 +124,7 @@ class CustomerController extends Controller
         ]);
 
         // Update customer basic info
+        $data['opening_balance'] = $data['opening_balance'] ?? 0;
         $customer->update($data);
 
         // Update ledger if opening balance is changed

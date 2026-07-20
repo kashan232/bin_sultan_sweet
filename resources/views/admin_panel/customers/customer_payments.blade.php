@@ -11,7 +11,8 @@
                     <h4>Customer Payments & Recoveries</h4>
                     <h6>Manage Customer Receivables</h6>
                 </div>
-                <div class="page-btn d-flex justify-content-end col-lg-6">
+                <div class="page-btn d-flex justify-content-end col-lg-6 gap-2">
+                    <a href="{{ route('customers.index') }}" class="btn btn-outline-secondary mb-2"><i class="bi bi-arrow-left me-1"></i> Back</a>
                     <button class="btn btn-outline-primary mb-2" data-bs-toggle="modal" data-bs-target="#paymentModal" onclick="clearPaymentForm()">Add Payment</button>
                 </div>
             </div>

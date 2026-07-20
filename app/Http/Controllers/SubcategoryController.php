@@ -21,10 +21,12 @@ class SubcategoryController extends Controller
 
     public function store(request $request){
 
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|unique:subcategories,name,'.$request->edit_id,
-            'category_id' => 'required'.$request->edit_id,
-        ]);
+        $editId = $request->edit_id;
+        $rules = [
+            'name' => 'required|unique:subcategories,name,' . ($editId ?: 'NULL') . ',id',
+            'category_id' => 'required',
+        ];
+        $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
             return ['errors' => $validator->errors()];

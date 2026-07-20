@@ -50,6 +50,8 @@ use App\Http\Controllers\StockAdjustmentController;
 Route::get('/home', [HomeController::class, 'index'])->middleware('auth')->name('home');
 
 Route::get('System/Reports', [HomeController::class, 'System_Reports'])->name('System.Reports')->middleware('permission:System Reports');
+Route::get('System/Reports/PDF', [HomeController::class, 'System_Reports_PDF'])->name('System.Reports.PDF')->middleware('permission:System Reports');
+Route::get('System/Reports/PDF-BW', [HomeController::class, 'System_Reports_PDF_BW'])->name('System.Reports.PDF.BW')->middleware('permission:System Reports');
 Route::get('/category-products/{id}', [HomeController::class, 'categoryProducts']);
 
 // Route::get('/adminpage', [HomeController::class, 'adminpage'])->middleware(['auth','admin'])->name('adminpage');
@@ -319,6 +321,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/report/item-stock', [ReportingController::class, 'item_stock_report'])->name('report.item_stock')->middleware('permission:Item Stock Report');
     Route::post('/report/item-stock-fetch', [ReportingController::class, 'fetchItemStock'])->name('report.item_stock.fetch');
+    Route::get('/report/item-stock/closing-print', [ReportingController::class, 'printClosing'])->name('report.item_stock.closing_print');
     Route::post('/report/variant-stock-fetch', [ReportingController::class, 'fetchVariantStock'])->name('report.variant_stock.fetch');
 
 
@@ -342,6 +345,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('report/vendor/ledger', [ReportingController::class, 'vendor_ledger_report'])->name('report.vendor.ledger')->middleware('permission:Vendor Ledger');
     Route::get('report/vendor-ledger/fetch', [ReportingController::class, 'fetch_vendor_ledger'])->name('report.vendor.ledger.fetch');
+    Route::get('report/vendor-ledger/pdf', [ReportingController::class, 'vendor_ledger_pdf'])->name('report.vendor.ledger.pdf')->middleware('permission:Vendor Ledger');
 
     Route::get('report/expense/vocher', [ReportingController::class, 'expense_vocher'])->name('expense.vocher');
     Route::get('/expense-voucher/ajax', [ReportingController::class, 'expenseVoucherAjax'])->name('expense.voucher.ajax');

@@ -8,6 +8,7 @@ use App\Models\ExpenseVoucher;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\VendorPayment;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,13 +26,15 @@ class ReportingController extends Controller
 
     public function fetchItemStock(Request $request)
     {
-        $productId  = $request->product_id;
+        $productIdsArr = $request->input('product_id', 'all');
         $searchQ    = trim($request->get('q', ''));
         $startDate  = $request->start_date ?? date('Y-m-01');
         $endDate    = $request->end_date   ?? date('Y-m-t');
+        $startTime  = $request->start_time ?? '00:00:00';
+        $endTime    = $request->end_time   ?? '23:59:59';
 
-        $startDT = $startDate . ' 00:00:00';
-        $endDT   = $endDate   . ' 23:59:59';
+        $startDT = $startDate . ' ' . $startTime;
+        $endDT   = $endDate   . ' ' . $endTime;
 
         // Check if there is a stock reset timestamp
         $resetTime = null;
@@ -42,8 +45,16 @@ class ReportingController extends Controller
         // 1. Get products and their variants
         $pQuery = Product::with(['variants', 'unit'])->orderBy('item_name');
 
-        if ($productId && $productId !== 'all') {
-            $pQuery->where('id', $productId);
+        $productIdsFilter = [];
+        if (is_array($productIdsArr)) {
+            if (!in_array('all', $productIdsArr)) {
+                $productIdsFilter = $productIdsArr;
+            }
+        } elseif ($productIdsArr !== 'all') {
+            $productIdsFilter = [$productIdsArr];
+        }
+        if (!empty($productIdsFilter)) {
+            $pQuery->whereIn('id', $productIdsFilter);
         } elseif ($searchQ !== '') {
             $pQuery->where(function($q) use ($searchQ) {
                 $q->where('item_name','like',"%{$searchQ}%")
@@ -1348,120 +1359,122 @@ class ReportingController extends Controller
         ]);
     }
 
+    public function vendor_ledger_pdf(Request $request)
+    {
+        $vendorId = $request->vendor_id;
+        $start = $request->start_date;
+        $end = $request->end_date;
+
+        if (!$vendorId || !$start || !$end) {
+            return redirect()->route('report.vendor.ledger')->with('error', 'Please select vendor and dates');
+        }
+
+        $request->merge(['end_date' => $end]);
+        $response = $this->fetch_vendor_ledger($request);
+        $data = $response->getData();
+
+        $pdf = Pdf::loadView('admin_panel.reporting.vendor_ledger_pdf', [
+            'vendor' => $data->vendor,
+            'opening_balance' => $data->opening_balance,
+            'transactions' => $data->transactions,
+            'start_date' => $start,
+            'end_date' => $end,
+        ]);
+
+        return $pdf->download('Vendor_Ledger_' . $vendorId . '.pdf');
+    }
+
     public function cashbook(Request $request)
     {
-        // ✅ Allow date filtering, default to today
         $selectedDate = $request->get('date', Carbon::today()->toDateString());
         $today = $selectedDate;
-        
-        // ✅ Cashbook Start Date (transactions before this are ignored)
-        // Default: 30 days ago to avoid huge opening balance from old data
         $startDate = $request->get('start_date', Carbon::today()->subDays(30)->toDateString());
+        $startTime = $request->start_time ?? '00:00';
+        $endTime   = $request->end_time   ?? '23:59';
 
-        /* ================= CALCULATE OPENING BALANCE ================= */
-        // Opening = sum of ALL transactions BETWEEN start_date and selected date (exclusive)
-        
-        // Sales after start_date but before selected date
-        $previousSales = Sale::whereDate('created_at', '>=', $startDate)
-            ->whereDate('created_at', '<', $today)
-            ->sum('total_net');
-        
-        // Customer recoveries after start_date but before selected date
-        $previousCustomerRecoveries = CustomerPayment::whereDate('payment_date', '>=', $startDate)
-            ->whereDate('payment_date', '<', $today)
-            ->sum('amount');
-        
-        // Vendor payments after start_date but before selected date
-        $previousVendorPayments = VendorPayment::whereDate('payment_date', '>=', $startDate)
-            ->whereDate('payment_date', '<', $today)
-            ->sum('amount');
-        
-        // Expenses after start_date but before selected date
-        $previousExpenses = ExpenseVoucher::whereDate('date', '>=', $startDate)
-            ->whereDate('date', '<', $today)
-            ->sum('total_amount');
-        
-        // Opening = Previous Receipts - Previous Payments
+        $startDT = $selectedDate . ' ' . $startTime . ':00';
+        $endDT   = $selectedDate . ' ' . $endTime   . ':59';
+
+        /* ================= OPENING BALANCE ================= */
+        $previousSales = Sale::where('created_at', '>=', $startDate . ' 00:00:00')
+            ->where('created_at', '<', $startDT)->sum('total_net');
+        $previousCustomerRecoveries = CustomerPayment::where('payment_date', '>=', $startDate . ' 00:00:00')
+            ->where('payment_date', '<', $startDT)->sum('amount');
+        $previousVendorPayments = VendorPayment::where('payment_date', '>=', $startDate . ' 00:00:00')
+            ->where('payment_date', '<', $startDT)->sum('amount');
+        $previousExpenses = ExpenseVoucher::where('date', '>=', $startDate . ' 00:00:00')
+            ->where('date', '<', $startDT)->sum('total_amount');
         $openingBalance = ($previousSales + $previousCustomerRecoveries) - ($previousVendorPayments + $previousExpenses);
 
-        /* ================= RECEIPTS (Current Date) ================= */
-
-        $receipts = [];
-
-        // ✅ ALL Sales (not just walk-in)
-        $allSales = Sale::whereDate('created_at', $today)->get();
-
-        foreach ($allSales as $sale) {
-            $receipts[] = [
-                'title'  => 'Sale',
-                'ref'    => 'Invoice #' . $sale->invoice_no,
-                'amount' => $sale->total_net,
-            ];
-        }
-
-        // ✅ ALL Customer Recoveries (not just cash)
+        /* ================= TODAY'S DATA (with time filter) ================= */
+        $allSales = Sale::where('created_at', '>=', $startDT)
+            ->where('created_at', '<=', $endDT)->get();
         $customerRecoveries = CustomerPayment::with('customer')
-            ->whereDate('payment_date', $today)
-            ->get();
-
-        foreach ($customerRecoveries as $pay) {
-            $receipts[] = [
-                'title'  => 'Customer Recovery',
-                'ref'    => ($pay->customer->customer_name ?? '-') . ' (' . ($pay->payment_method ?? 'N/A') . ')',
-                'amount' => $pay->amount,
-            ];
-        }
-
-        $totalReceipts = collect($receipts)->sum('amount');
-
-        /* ================= PAYMENTS (Current Date) ================= */
-
-        $payments = [];
-
-        // ✅ ALL Vendor Payments (not just cash)
+            ->where('payment_date', '>=', $startDT)
+            ->where('payment_date', '<=', $endDT)->get();
         $vendorPayments = VendorPayment::with('vendor')
-            ->whereDate('payment_date', $today)
-            ->get();
+            ->where('payment_date', '>=', $startDT)
+            ->where('payment_date', '<=', $endDT)->get();
+        $expenseVouchers = ExpenseVoucher::where('date', '>=', $startDT)
+            ->where('date', '<=', $endDT)->get();
 
-        foreach ($vendorPayments as $pay) {
-            $payments[] = [
-                'title'  => 'Vendor Payment',
-                'ref'    => ($pay->vendor->name ?? '-') . ' (' . ($pay->payment_method ?? 'N/A') . ')',
-                'amount' => $pay->amount,
-            ];
+        /* ================= RECEIPTS BREAKDOWN ================= */
+        $totalSaleCash = $allSales->sum('cash');
+        $totalSaleCard = $allSales->sum('card');
+        $totalChange   = $allSales->sum('change');
+        $totalSaleNet  = $allSales->sum('total_net');
+        $saleCount     = $allSales->count();
+
+        $recoveryByMethod = [];
+        foreach ($customerRecoveries as $cr) {
+            $m = $cr->payment_method ?? 'Other';
+            if (!isset($recoveryByMethod[$m])) $recoveryByMethod[$m] = 0;
+            $recoveryByMethod[$m] += $cr->amount;
         }
+        $totalRecoveries = $customerRecoveries->sum('amount');
+        $totalReceipts = $totalSaleNet + $totalRecoveries;
 
-        // ✅ ALL Expense Vouchers
-        $expenseVouchers = ExpenseVoucher::whereDate('date', $today)->get();
-
-        foreach ($expenseVouchers as $exp) {
-            $remarks = is_array($exp->remarks) ? implode(', ', $exp->remarks) : ($exp->remarks ?? '');
-            $payments[] = [
-                'title'  => 'Expense',
-                'ref'    => $remarks ?: 'Voucher #' . $exp->evid,
-                'amount' => $exp->total_amount,
-            ];
+        /* ================= PAYMENTS BREAKDOWN ================= */
+        $vendorPayByMethod = [];
+        foreach ($vendorPayments as $vp) {
+            $m = $vp->payment_method ?? 'Other';
+            if (!isset($vendorPayByMethod[$m])) $vendorPayByMethod[$m] = 0;
+            $vendorPayByMethod[$m] += $vp->amount;
         }
-
-        $totalPayments = collect($payments)->sum('amount');
-
-        /* ================= CLOSING BALANCE ================= */
-
+        $totalVendorPayments = $vendorPayments->sum('amount');
+        $totalExpenses = $expenseVouchers->sum('total_amount');
+        $totalPayments = $totalVendorPayments + $totalExpenses;
         $closingBalance = $openingBalance + $totalReceipts - $totalPayments;
 
-        // IMPORTANT for blade loop
+        /* ================= DETAILED ENTRIES ================= */
+        $receipts = [];
+        foreach ($allSales as $sale) {
+            $receipts[] = ['title' => 'Sale', 'ref' => '#' . $sale->invoice_no, 'amount' => $sale->total_net];
+        }
+        foreach ($customerRecoveries as $cr) {
+            $receipts[] = ['title' => 'Recovery', 'ref' => ($cr->customer->customer_name ?? '-') . ' (' . ($cr->payment_method ?? 'N/A') . ')', 'amount' => $cr->amount];
+        }
+
+        $payments = [];
+        foreach ($vendorPayments as $vp) {
+            $payments[] = ['title' => 'Vendor Pay', 'ref' => ($vp->vendor->name ?? '-') . ' (' . ($vp->payment_method ?? 'N/A') . ')', 'amount' => $vp->amount];
+        }
+        foreach ($expenseVouchers as $exp) {
+            $remarks = is_array($exp->remarks) ? implode(', ', $exp->remarks) : ($exp->remarks ?? '');
+            $payments[] = ['title' => 'Expense', 'ref' => $remarks ?: 'Voucher #' . $exp->evid, 'amount' => $exp->total_amount];
+        }
+
         $maxRows = max(count($receipts), count($payments));
 
         return view('admin_panel.reporting.CashBook', compact(
-            'receipts',
-            'payments',
-            'maxRows',
-            'totalReceipts',
-            'totalPayments',
-            'openingBalance',
-            'closingBalance',
-            'selectedDate',
-            'startDate'
+            'receipts', 'payments', 'maxRows',
+            'totalReceipts', 'totalPayments',
+            'openingBalance', 'closingBalance',
+            'selectedDate', 'startDate', 'startTime', 'endTime',
+            'totalSaleCash', 'totalSaleCard', 'totalChange', 'totalSaleNet', 'saleCount',
+            'recoveryByMethod', 'totalRecoveries',
+            'vendorPayByMethod', 'totalVendorPayments',
+            'totalExpenses', 'allSales', 'customerRecoveries', 'vendorPayments', 'expenseVouchers'
         ));
     }
 
@@ -1737,5 +1750,48 @@ class ReportingController extends Controller
             'expensesCount' => $expenses->count(),
             'userName' => $userName
         ]);
+    }
+
+    /**
+     * Print Closing Report (Black Copper / thermal receipt)
+     * Business day: 7am to 3am next day
+     */
+    public function printClosing(Request $request)
+    {
+        $productIds = $request->input('product_id', 'all');
+        $startTime  = $request->start_time ?? '07:00:00';
+        $endTime    = $request->end_time   ?? '03:00:00';
+
+        // Auto-compute closing period if not provided
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $startDate = $request->start_date;
+            $endDate   = $request->end_date;
+        } else {
+            $today = now();
+            $startDate = $today->copy()->setHour(7)->setMinute(0)->setSecond(0)->format('Y-m-d');
+            $endDate   = $today->copy()->addDay()->setHour(3)->setMinute(0)->setSecond(0)->format('Y-m-d');
+        }
+
+        $startDT = $startDate . ' ' . $startTime;
+        $endDT   = $endDate   . ' ' . $endTime;
+
+        $request->merge([
+            'product_id' => $productIds,
+            'start_date' => $startDate,
+            'end_date'   => $endDate,
+            'start_time' => $startTime,
+            'end_time'   => $endTime,
+        ]);
+
+        $response = $this->fetchItemStock($request);
+        $json = $response->getData();
+
+        $rows = $json->data ?? [];
+        $total = $json->total ?? 0;
+
+        $dateLabel = \Carbon\Carbon::parse($startDate)->format('d-M-Y');
+        $timeLabel = $startTime . ' to ' . $endTime;
+
+        return view('admin_panel.reporting.closing_print', compact('rows', 'total', 'startDate', 'endDate', 'dateLabel', 'timeLabel'));
     }
 }

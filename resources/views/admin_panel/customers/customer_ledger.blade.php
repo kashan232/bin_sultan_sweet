@@ -11,6 +11,9 @@
                     <h4>Customer Ledger</h4>
                     <h6>View Customer Balances</h6>
                 </div>
+                <div class="col-lg-6 text-end">
+                    <a href="{{ route('customers.index') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Back to Customers</a>
+                </div>
             </div>
 
             <div class="card mt-3">

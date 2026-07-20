@@ -681,7 +681,11 @@ class VoucherController extends Controller
 
         $vouchers = $query->orderBy('id', 'desc')->get();
         $users = \App\Models\User::all();
-        return view('admin_panel.vochers.expense_vochers.all_expense_vochers', compact('vouchers', 'users'));
+        $AccountHeads = \App\Models\AccountHead::get();
+        $lastVoucher = \App\Models\ExpenseVoucher::latest('id')->first();
+        $nextId = $lastVoucher ? $lastVoucher->id + 1 : 1;
+        $nextRvid = 'EVID-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+        return view('admin_panel.vochers.expense_vochers.all_expense_vochers', compact('vouchers', 'users', 'AccountHeads', 'nextRvid'));
     }
 
     public function expenseprint($id)
