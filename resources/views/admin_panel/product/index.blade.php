@@ -417,6 +417,9 @@
         <a href="create_prodcut" class="pc-btn pc-btn-primary pc-btn-sm">
           <i class="bi bi-plus-circle"></i>Add Product
         </a>
+        <button id="bulkEditBtn" class="pc-btn pc-btn-primary pc-btn-sm" style="display:none;">
+          <i class="bi bi-pencil-square"></i>Bulk Edit
+        </button>
         <button id="createDiscountBtn" class="pc-btn pc-btn-primary pc-btn-sm">
           <i class="bi bi-tag"></i>Create Discount
         </button>
@@ -453,7 +456,13 @@
           <table class="pc-tbl" style="width:100%">
             <thead>
               <tr>
-                <th style="width:32px;"><input type="checkbox" id="selectAll"></th>
+                <th style="width:32px;">
+                  <input type="checkbox" id="selectAll" title="Select this page">
+                  <br><input type="checkbox" id="selectAllPages" title="Select all products across all pages" style="margin-top:4px;">
+                  <div style="font-size:9px;color:var(--pc-text-muted);font-weight:400;line-height:1.1;">
+                    <span id="selectedCount">0</span>
+                  </div>
+                </th>
                 <th style="width:40px;">#</th>
                 <th>Item Code</th>
                 <th>Barcode</th>
@@ -506,7 +515,7 @@
                   <div class="pc-variant-list">
                     @foreach($product->variants as $variant)
                     <div>
-                      <span><strong>{{ $variant->variant_name }}</strong> - Rs {{ number_format($variant->price) }} <span style="color:var(--pc-text-muted)">({{ $variant->stock_qty }})</span></span>
+                      <span><strong>{{ $variant->variant_name }}</strong> - Rs {{ number_format($variant->price) }} <span style="color:var(--pc-text-muted)">({{ $product->unit_type == 'kg' ? number_format($product->total_stock ?? 0) : $variant->stock_qty }})</span></span>
                       @if($variant->is_default)<span class="v-default">Default</span>@endif
                     </div>
                     @endforeach
@@ -641,11 +650,88 @@ $(document).ready(function() {
     searchTimer = setTimeout(() => { fetchProducts(query); }, 400);
   });
 
-  $(document).on('click', '#paginationLinks a', function(e) {
-    e.preventDefault();
-    let url = $(this).attr('href');
-    fetchProducts($('#productSearch').val(), url);
+  var allSelectedIds = new Set();
+  var selectAllPagesActive = false;
+
+  // Update selected count display
+  function updateSelectedCount() {
+    var count = allSelectedIds.size;
+    $('#selectedCount').text(count);
+    if (count > 0) {
+      $('#bulkEditBtn').show();
+    } else {
+      $('#bulkEditBtn').hide();
+    }
+  }
+
+  // When "select all this page" is clicked, sync visible checkboxes
+  $('#selectAll').click(function() {
+    $('.selectProduct').prop('checked', this.checked);
+    // If select-all-pages is off, update the set from visible checkboxes
+    if (!selectAllPagesActive) {
+      allSelectedIds.clear();
+      $('.selectProduct:checked').each(function() { allSelectedIds.add($(this).val()); });
+      updateSelectedCount();
+    }
   });
+
+  // When individual checkbox changes
+  $(document).on('change', '.selectProduct', function() {
+    if (selectAllPagesActive) {
+      // Allow unchecking individual items even when "all pages" is on
+      if (!this.checked) {
+        allSelectedIds.delete($(this).val());
+      } else {
+        allSelectedIds.add($(this).val());
+      }
+      updateSelectedCount();
+    } else {
+      if (this.checked) {
+        allSelectedIds.add($(this).val());
+      } else {
+        allSelectedIds.delete($(this).val());
+      }
+      updateSelectedCount();
+    }
+  });
+
+  // "Select All Across Pages" checkbox
+  $('#selectAllPages').change(function() {
+    if (this.checked) {
+      selectAllPagesActive = true;
+      var search = $('#productSearch').val() || '';
+      // Fetch all product IDs matching current search
+      $.ajax({
+        url: "{{ route('products.all-ids') }}",
+        data: { search: search },
+        success: function(ids) {
+          allSelectedIds = new Set(ids.map(String));
+          // Check all visible checkboxes too
+          $('.selectProduct').each(function() { $(this).prop('checked', true); });
+          $('#selectAll').prop('checked', true);
+          updateSelectedCount();
+          Swal.fire({ icon: 'success', title: 'Selected!', text: ids.length + ' products selected across all pages', timer: 1500, showConfirmButton: false });
+        }
+      });
+    } else {
+      selectAllPagesActive = false;
+      allSelectedIds.clear();
+      $('.selectProduct').prop('checked', false);
+      $('#selectAll').prop('checked', false);
+      updateSelectedCount();
+    }
+  });
+
+  // After AJAX page load / search, re-sync checkboxes with allSelectedIds
+  function syncCheckboxesAfterLoad() {
+    $('.selectProduct').each(function() {
+      if (selectAllPagesActive || allSelectedIds.has($(this).val())) {
+        $(this).prop('checked', true);
+      }
+    });
+    var allVisible = $('.selectProduct').length > 0 && $('.selectProduct:checked').length === $('.selectProduct').length;
+    $('#selectAll').prop('checked', allVisible);
+  }
 
   function fetchProducts(search = '', url = null) {
     if (!url) url = "{{ route('product') }}";
@@ -655,17 +741,26 @@ $(document).ready(function() {
       success: function(res) {
         $('#productTable').html($(res).find('#productTable').html());
         $('#paginationLinks').html($(res).find('#paginationLinks').html());
+        syncCheckboxesAfterLoad();
       }
     });
   }
 
-  $('#selectAll').click(function() {
-    $('.selectProduct').prop('checked', this.checked);
+  // Bulk Edit button
+  $('#bulkEditBtn').click(function() {
+    var ids = Array.from(allSelectedIds);
+    if (ids.length === 0) {
+      Swal.fire({ icon: 'error', title: 'Oops...', text: 'Please select at least one product!' });
+      return;
+    }
+    var form = $('<form>').attr({ method: 'POST', action: "{{ route('products.bulk-edit-store') }}" });
+    form.append('@csrf');
+    ids.forEach(function(id) { form.append($('<input>').attr({ type: 'hidden', name: 'ids[]', value: id })); });
+    form.appendTo('body').submit();
   });
 
   $('#createDiscountBtn').click(function() {
-    var selected = [];
-    $('.selectProduct:checked').each(function() { selected.push($(this).val()); });
+    var selected = Array.from(allSelectedIds);
     if (selected.length === 0) {
       Swal.fire({ icon: "error", title: "Oops...", text: "Please select at least one product!" });
       return;

@@ -566,6 +566,183 @@ class ProductController extends Controller
         return response()->json($results);
     }
 
+    public function getAllProductIds(Request $request)
+    {
+        $search = $request->search;
+        $ids = Product::when($search, function ($query) use ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('item_name', 'like', "%{$search}%")
+                    ->orWhere('item_code', 'like', "%{$search}%")
+                    ->orWhere('barcode_path', 'like', "%{$search}%")
+                    ->orWhereHas('brand', function ($b) use ($search) {
+                        $b->where('name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('category_relation', function ($c) use ($search) {
+                        $c->where('name', 'like', "%{$search}%");
+                    });
+            });
+        })->pluck('id');
+        return response()->json($ids);
+    }
+
+    public function bulkEditStore(Request $request)
+    {
+        $ids = $request->input('ids');
+        if (!$ids || !is_array($ids)) {
+            return redirect()->route('product')->with('error', 'No products selected');
+        }
+        session(['bulk_edit_ids' => $ids]);
+        return redirect()->route('products.bulk-edit');
+    }
+
+    public function bulkEdit(Request $request)
+    {
+        $ids = session('bulk_edit_ids', []);
+        if (empty($ids)) {
+            return redirect()->route('product')->with('error', 'No products selected');
+        }
+        $products = Product::with([
+            'category_relation', 'sub_category_relation', 'unit', 'brand',
+            'variants.stock', 'stocks'
+        ])->whereIn('id', $ids)->orderBy('item_code')->get();
+
+        $categories = Category::orderBy('id', 'desc')->get();
+        $brands = Brand::select('id', 'name')->get();
+        $subcategories = Subcategory::all();
+        return view('admin_panel.product.bulk_edit', compact('products', 'categories', 'brands', 'subcategories'));
+    }
+
+    public function bulkUpdate(Request $request)
+    {
+        if (!Auth::check()) {
+            return redirect()->route('login')->with('error', 'Session expired. Please log in again.');
+        }
+
+        \Log::info('BulkUpdate called', ['input_keys' => array_keys($request->all()), 'product_count' => count($request->input('product_name', []))]);
+
+        try {
+            DB::beginTransaction();
+
+            $productNames = $request->input('product_name', []);
+            $prices = $request->input('price', []);
+            $categories = $request->input('category_id', []);
+            $subCategories = $request->input('sub_category_id', []);
+            $unitTypes = $request->input('unit_type', []);
+            $alertQtys = $request->input('alert_quantity', []);
+            $brandIds = $request->input('brand_id', []);
+
+            // Variant data arrays (keyed by product_id)
+            $variantNames = $request->input('variant_name', []);
+            $variantSizeValues = $request->input('variant_size_value', []);
+            $variantSizeUnits = $request->input('variant_size_unit', []);
+            $variantPrices = $request->input('variant_price', []);
+            $variantCostPrices = $request->input('variant_cost_price', []);
+            $variantStocks = $request->input('variant_stock', []);
+            $variantIds = $request->input('variant_id', []);
+            $variantDefaults = $request->input('variant_default', []);
+            $kgStocks = $request->input('kg_stock', []);
+
+            foreach ($productNames as $pid => $name) {
+                $product = Product::findOrFail($pid);
+
+                $product->update([
+                    'item_name'       => $name,
+                    'category_id'     => isset($categories[$pid]) ? (int)$categories[$pid] : $product->category_id,
+                    'sub_category_id' => isset($subCategories[$pid]) ? (int)$subCategories[$pid] : $product->sub_category_id,
+                    'unit_type'       => $unitTypes[$pid] ?? $product->unit_type,
+                    'alert_quantity'  => isset($alertQtys[$pid]) ? (int)$alertQtys[$pid] : $product->alert_quantity,
+                    'brand_id'        => isset($brandIds[$pid]) ? (int)$brandIds[$pid] : $product->brand_id,
+                    'price'           => isset($prices[$pid]) ? (float)$prices[$pid] : $product->price,
+                ]);
+
+                // --- Sync Variants for this product ---
+                $vNames = $variantNames[$pid] ?? [];
+                $vIds = $variantIds[$pid] ?? [];
+                $keepIds = array_filter($vIds ?? []);
+
+                // Remove deleted variants
+                ProductVariant::where('product_id', $product->id)
+                    ->whereNotIn('id', $keepIds)
+                    ->each(function ($v) use ($product) {
+                        DB::table('stocks')->where('product_id', $product->id)->where('variant_id', $v->id)->delete();
+                        $v->delete();
+                    });
+
+                if (!empty($vNames)) {
+                    foreach ($vNames as $idx => $vName) {
+                        if (empty($vName)) continue;
+                        if (!isset($vIds[$idx]) || empty($vIds[$idx])) continue;
+
+                        $vId = $vIds[$idx];
+                        $sizeValue = (float)($variantSizeValues[$pid][$idx] ?? 0);
+                        $sizeUnit = $variantSizeUnits[$pid][$idx] ?? ($product->unit_type ?? 'piece');
+                        $vPrice = (float)($variantPrices[$pid][$idx] ?? 0);
+                        $vCost = (float)($variantCostPrices[$pid][$idx] ?? 0);
+                        // For KG products, use single product-level stock instead of per-variant
+                        if ($product->unit_type == 'kg' && isset($kgStocks[$pid])) {
+                            $vStockQty = (float)$kgStocks[$pid];
+                        } else {
+                            $vStockQty = (float)($variantStocks[$pid][$idx] ?? 0);
+                        }
+                        $isDefault = ($variantDefaults[$pid] == $idx);
+
+                        $dbSizeValue = $sizeValue;
+                        $sizeLabel = $vName;
+                        if ($sizeUnit === 'kg') {
+                            $dbSizeValue = $sizeValue / 1000;
+                            $sizeLabel = $vName . ' (' . number_format($dbSizeValue, 3) . ' KG)';
+                        }
+
+                        $variantData = [
+                            'product_id'      => $product->id,
+                            'variant_name'    => $vName,
+                            'size_label'      => $sizeLabel,
+                            'size_value'      => $dbSizeValue,
+                            'size_unit'       => $sizeUnit,
+                            'price'           => $vPrice,
+                            'wholesale_price' => 0,
+                            'cost_price'      => $vCost,
+                            'alert_quantity'  => 0,
+                            'is_default'      => $isDefault,
+                            'is_active'       => true,
+                        ];
+
+                        if ($vId) {
+                            $variant = ProductVariant::findOrFail($vId);
+                            $variantData['stock_qty'] = $vStockQty;
+                            $variant->update($variantData);
+                            // Update stocks table
+                            DB::table('stocks')
+                                ->where('product_id', $product->id)
+                                ->where('variant_id', $variant->id)
+                                ->update(['qty' => $vStockQty, 'updated_at' => now()]);
+                        } else {
+                            $variantData['stock_qty'] = $vStockQty;
+                            $variant = ProductVariant::create($variantData);
+                            DB::table('stocks')->insert([
+                                'branch_id'    => 1,
+                                'warehouse_id' => 1,
+                                'product_id'   => $product->id,
+                                'variant_id'   => $variant->id,
+                                'qty'          => $vStockQty,
+                                'created_at'   => now(),
+                                'updated_at'   => now(),
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            DB::commit();
+            \Log::info('BulkUpdate completed successfully', ['updated_count' => count($productNames)]);
+            return redirect()->route('product')->with('success', 'All selected products updated successfully!');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error("Bulk update error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return back()->with('error', 'Bulk update failed: ' . $e->getMessage());
+        }
+    }
+
     public function resetStock(Request $request)
     {
         if (!Auth::check() || Auth::user()->email !== 'admin@admin.com') {

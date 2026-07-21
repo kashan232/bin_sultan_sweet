@@ -98,10 +98,14 @@ Route::middleware('auth')->group(function () {
     Route::put('/product/update/{id}', [ProductController::class, 'update'])->name('product.update');
     Route::get('/get-subcategories/{category_id}', [ProductController::class, 'getSubcategories'])->name('fetch-subcategories');
     Route::get('/generate-barcode-image', [ProductController::class, 'generateBarcode'])->name('generate-barcode-image');
-    Route::get('/products/{id}/edit', [ProductController::class, 'edit'])->name('products.edit');
     Route::get('/barcode/{id}', [ProductController::class, 'barcode'])->name('product.barcode');
     Route::get('/get-all-products-for-search', [ProductController::class, 'getAllProductsForSearch'])->name('get-all-products-for-search');
     Route::post('/products/reset-stock', [ProductController::class, 'resetStock'])->name('products.reset_stock');
+    Route::get('/products/all-ids', [ProductController::class, 'getAllProductIds'])->name('products.all-ids');
+    Route::post('/products/bulk-edit-store', [ProductController::class, 'bulkEditStore'])->name('products.bulk-edit-store');
+    Route::get('/products/bulk-edit', [ProductController::class, 'bulkEdit'])->name('products.bulk-edit');
+    Route::post('/products/bulk-update', [ProductController::class, 'bulkUpdate'])->name('products.bulk-update');
+    Route::get('/products/{id}/edit', [ProductController::class, 'edit'])->name('products.edit');
 
     Route::prefix('discount')->group(function () {
         Route::get('/', [DiscountController::class, 'index'])->name('discount.index')->middleware('permission:Discount Products');
