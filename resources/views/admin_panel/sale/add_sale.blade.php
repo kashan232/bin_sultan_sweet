@@ -405,7 +405,29 @@ function handleOrderTypeChange(saveToStorage) {
 
 function selectTable(id, name, status) {
     if (status === 'occupied') {
-        fetchActiveOrder(id, name);
+        Swal.fire({
+            title: 'Table: ' + name,
+            text: 'What would you like to do?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '<i class="la la-print"></i> Print Bill',
+            confirmButtonColor: '#2b7fff',
+            cancelButtonText: '<i class="la la-check-circle"></i> Complete Order',
+            cancelButtonColor: '#059669',
+            reverseButtons: true,
+            showDenyButton: true,
+            denyButtonText: '<i class="la la-times"></i> Cancel',
+            denyButtonColor: '#6b7280',
+        }).then(result => {
+            if (result.isConfirmed) {
+                // Print Bill — open as printable bill (no payment)
+                window.open("{{ url('/pos/print-bill') }}/" + id, '_blank');
+                hideModal('tableModal');
+            } else if (result.isDismissed && result.dismiss === Swal.DismissReason.cancel) {
+                // Complete Order — load into cart for payment
+                fetchActiveOrder(id, name);
+            }
+        });
     } else {
         document.getElementById('hTableId').value = id;
         document.getElementById('selTableName').innerText = 'Table: ' + name;
@@ -471,8 +493,9 @@ function saveToken() {
     if (submitting) return;
     if (!cart.length) { toast('Koi product nahi add kiya'); return; }
     if (!document.getElementById('hTableId').value) { toast('Table select karein!'); showModal('tableModal'); return; }
+    savePosState();
     buildFields();
-    document.getElementById('hAction').value = 'save_token'; // We will handle this in SaleController
+    document.getElementById('hAction').value = 'save_token';
     submitting = true;
     document.getElementById('salesForm').submit();
 }
@@ -509,10 +532,11 @@ function loadProds(reset=false) {
         const total   = json.total;
         const loaded  = Math.min(json.current_page * 60, total);
 
-        if (reset) grid.innerHTML = '';
+        if (reset) { grid.innerHTML = ''; delete grid.dataset.recentLoaded; }
 
         if (!json.data.length && reset) {
             grid.innerHTML = '<div class="g-empty"><i class="la la-frown-open"></i>No products found</div>';
+            prependRecentToGrid(grid);
             loading = false;
             return;
         }
@@ -524,6 +548,9 @@ function loadProds(reset=false) {
         document.getElementById('loadMore')?.remove();
         document.getElementById('posCounter')?.remove();
         grid.appendChild(frag);
+
+        // Prepend recent products on first load (not load-more)
+        if (reset) prependRecentToGrid(grid);
 
         // Counter label
         const counter = document.createElement('div');
@@ -622,6 +649,47 @@ document.querySelectorAll('.cat-tab').forEach(function(t) {
         loadProds(true);
     });
 });
+
+/* ---- Restore last search from sessionStorage ---- */
+(function restoreLastSearch() {
+    try {
+        const savedQ = sessionStorage.getItem('pos_last_q');
+        const savedCat = sessionStorage.getItem('pos_last_cat');
+        if (savedQ) {
+            curQ = savedQ;
+            document.getElementById('posSearch').value = savedQ;
+        }
+        if (savedCat) {
+            curCat = savedCat;
+            document.querySelectorAll('.cat-tab').forEach(function(t) {
+                t.classList.toggle('active', (t.dataset.cat || '') === savedCat);
+            });
+        }
+    } catch(e) {}
+})();
+
+/* ---- Prepend recent products to grid (after regular products load) ---- */
+function prependRecentToGrid(grid) {
+    if (grid.dataset.recentLoaded) return;
+    try {
+        const recent = JSON.parse(localStorage.getItem('pos_recent') || '[]');
+        if (!recent.length) return;
+        const ids = recent.map(function(r) { return r.id; }).slice(0, 6);
+        fetch("{{ route('pos.recent.products') }}?ids[]=" + ids.join('&ids[]='), {
+            headers: {'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}
+        }).then(function(res) { return res.json(); }).then(function(json) {
+            if (json.data && json.data.length) {
+                // Prepend cards in reverse order so first is at top
+                for (let i = json.data.length - 1; i >= 0; i--) {
+                    const card = makeCard(json.data[i]);
+                    card.classList.add('recent-card');
+                    grid.prepend(card);
+                }
+                grid.dataset.recentLoaded = '1';
+            }
+        }).catch(function() {});
+    } catch(e) {}
+}
 
 loadProds(true);
 
@@ -766,16 +834,32 @@ function openSzModal(p) {
         }
     };
 
+    // ⌨️ KG: By Grams pe Enter → focus Qty field
+    hGrams.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            setTimeout(function() {
+                document.getElementById('mQty')?.focus();
+                document.getElementById('mQty')?.select();
+            }, 50);
+        }
+    });
+
     fetch(`${VAR_URL}/${p.id}`,{headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}})
     .then(r=>r.json()).then(data=>{ 
         curProd.variants = data.variants; 
         renderSizes(data.variants); 
         document.getElementById('szTitle').innerHTML = '📦 Size — ' + data.item_name + ' <small class="badge bg-dark ms-2" style="font-size:11px">Avail: ' + fmtStk(data.total_stock, data.unit_type) + '</small>';
         
-        // ⌨️ Focus on qty field
+        // ⌨️ Focus: KG → By Grams, otherwise → Qty
         setTimeout(function() {
-            const qEl = document.getElementById('mQty');
-            if (qEl) { qEl.focus(); qEl.select(); }
+            if (p.unit_type === 'kg') {
+                const gEl = document.getElementById('hGrams');
+                if (gEl) { gEl.focus(); gEl.select(); }
+            } else {
+                const qEl = document.getElementById('mQty');
+                if (qEl) { qEl.focus(); qEl.select(); }
+            }
         }, 80);
     })
     .catch(()=>{ document.getElementById('szGrid').innerHTML='<p class="text-danger">Size load failed.</p>'; });
@@ -1110,10 +1194,44 @@ function buildFields(){
     });
 }
 let submitting=false;
+
+/* ---- Save POS state so it persists after form submit ---- */
+function savePosState() {
+    try {
+        sessionStorage.setItem('pos_last_q', curQ);
+        sessionStorage.setItem('pos_last_cat', curCat);
+        // Save cart products for "Recent" bar (last 12 unique products)
+        let recent = JSON.parse(localStorage.getItem('pos_recent') || '[]');
+        const seen = new Set();
+        cart.forEach(function(item) {
+            const key = item.id + ':' + (item.variantId || '');
+            if (!seen.has(key)) {
+                seen.add(key);
+                recent.unshift({
+                    id: item.id,
+                    variantId: item.variantId || null,
+                    name: item.label && item.label !== item.name ? item.label : item.name,
+                    price: item.price,
+                    time: Date.now()
+                });
+            }
+        });
+        // Deduplicate by id+variantId, keep last 12
+        const map = new Map();
+        recent.forEach(function(r) {
+            const k = r.id + ':' + (r.variantId || '');
+            map.set(k, r);
+        });
+        recent = Array.from(map.values()).slice(0, 12);
+        localStorage.setItem('pos_recent', JSON.stringify(recent));
+    } catch(e) {}
+}
+
 function doSale(){
     if (submitting) return;
     if (!cart.length){ toast('Koi product nahi add kiya'); return; }
 
+    savePosState();
     const net = parseFloat(document.getElementById('hNet').value) || 0;
     const cash = parseFloat(document.getElementById('cashI').value) || 0;
     const card = parseFloat(document.getElementById('cardI').value) || 0;
@@ -1142,6 +1260,7 @@ function openBook(){
 function confirmBook(){
     const adv=parseFloat(document.getElementById('bkAdv').value)||0;
     document.getElementById('hAdv').value=adv.toFixed(2);
+    savePosState();
     buildFields(); document.getElementById('hAction').value='booking'; submitting=true;
     hideModal('bkModal');
     document.getElementById('salesForm').submit();

@@ -679,8 +679,9 @@ class ProductController extends Controller
                         $vPrice = (float)($variantPrices[$pid][$idx] ?? 0);
                         $vCost = (float)($variantCostPrices[$pid][$idx] ?? 0);
                         // For KG products, use single product-level stock instead of per-variant
+                        // Stock is stored in grams (same as production: 10 KG = 10000 grams)
                         if ($product->unit_type == 'kg' && isset($kgStocks[$pid])) {
-                            $vStockQty = (float)$kgStocks[$pid];
+                            $vStockQty = (float)$kgStocks[$pid] * 1000;
                         } else {
                             $vStockQty = (float)($variantStocks[$pid][$idx] ?? 0);
                         }
@@ -709,22 +710,57 @@ class ProductController extends Controller
 
                         if ($vId) {
                             $variant = ProductVariant::findOrFail($vId);
-                            $variantData['stock_qty'] = $vStockQty;
+                            // For KG products, don't update per-variant stock — handled at product level
+                            if ($product->unit_type != 'kg') {
+                                $variantData['stock_qty'] = $vStockQty;
+                            }
                             $variant->update($variantData);
-                            // Update stocks table
-                            DB::table('stocks')
-                                ->where('product_id', $product->id)
-                                ->where('variant_id', $variant->id)
-                                ->update(['qty' => $vStockQty, 'updated_at' => now()]);
+                            // For non-KG, update per-variant stock record
+                            if ($product->unit_type != 'kg') {
+                                DB::table('stocks')
+                                    ->where('product_id', $product->id)
+                                    ->where('variant_id', $variant->id)
+                                    ->update(['qty' => $vStockQty, 'updated_at' => now()]);
+                            }
                         } else {
-                            $variantData['stock_qty'] = $vStockQty;
+                            if ($product->unit_type != 'kg') {
+                                $variantData['stock_qty'] = $vStockQty;
+                            }
                             $variant = ProductVariant::create($variantData);
+                            if ($product->unit_type != 'kg') {
+                                DB::table('stocks')->insert([
+                                    'branch_id'    => 1,
+                                    'warehouse_id' => 1,
+                                    'product_id'   => $product->id,
+                                    'variant_id'   => $variant->id,
+                                    'qty'          => $vStockQty,
+                                    'created_at'   => now(),
+                                    'updated_at'   => now(),
+                                ]);
+                            }
+                        }
+                    }
+
+                    // After variant loop: update product-level stock for KG products
+                    if ($product->unit_type == 'kg' && isset($kgStocks[$pid])) {
+                        $kgQtyGrams = (float)$kgStocks[$pid] * 1000;
+                        $stockRec = DB::table('stocks')
+                            ->where('product_id', $product->id)
+                            ->whereNull('variant_id')
+                            ->where('branch_id', 1)
+                            ->where('warehouse_id', 1)
+                            ->first();
+                        if ($stockRec) {
+                            DB::table('stocks')
+                                ->where('id', $stockRec->id)
+                                ->update(['qty' => $kgQtyGrams, 'updated_at' => now()]);
+                        } else {
                             DB::table('stocks')->insert([
                                 'branch_id'    => 1,
                                 'warehouse_id' => 1,
                                 'product_id'   => $product->id,
-                                'variant_id'   => $variant->id,
-                                'qty'          => $vStockQty,
+                                'variant_id'   => null,
+                                'qty'          => $kgQtyGrams,
                                 'created_at'   => now(),
                                 'updated_at'   => now(),
                             ]);

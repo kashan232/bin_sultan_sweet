@@ -332,6 +332,60 @@ class SaleController extends Controller
         ]);
     }
 
+    public function getRecentProducts(Request $request)
+    {
+        $ids = $request->input('ids', []);
+        if (!is_array($ids) || empty($ids)) {
+            return response()->json(['data' => []]);
+        }
+
+        $products = Product::with(['brand', 'stock', 'variants', 'activeDiscount', 'category_relation'])
+            ->withSum(['stocks as total_stock' => function($q) {
+                $q->where('branch_id', 1)->where('warehouse_id', 1);
+            }], 'qty')
+            ->whereIn('id', $ids)
+            ->get()
+            ->sortBy(function($p) use ($ids) { return array_search($p->id, $ids); })
+            ->values();
+
+        $items = $products->map(function ($product) {
+            $rawPrice = (float) $product->price;
+            if ($rawPrice <= 0 && $product->variants->count() > 0) {
+                $defaultVariant = $product->variants->firstWhere('is_default', true)
+                    ?? $product->variants->first();
+                $rawPrice = (float) ($defaultVariant->price ?? 0);
+            }
+            $price = $rawPrice;
+            if ($product->activeDiscount) {
+                $price = (float) ($product->activeDiscount->final_price ?? $rawPrice);
+            }
+            $stock    = (float) ($product->total_stock ?? 0);
+            $imageUrl = $product->image
+                ? asset('uploads/products/' . $product->image)
+                : null;
+            return [
+                'id'               => $product->id,
+                'item_name'        => $product->item_name,
+                'item_code'        => $product->item_code,
+                'category_id'      => $product->category_id,
+                'category'         => $product->category_relation?->name ?? 'Other',
+                'brand'            => $product->brand?->name ?? '',
+                'unit_id'          => $product->unit_id,
+                'note'             => $product->note ?? '',
+                'price'            => $price,
+                'original_price'   => $rawPrice,
+                'has_discount'     => $product->activeDiscount ? true : false,
+                'discount_percent' => $product->activeDiscount?->discount_percentage ?? 0,
+                'stock'            => $stock,
+                'image'            => $imageUrl,
+                'has_variants'     => $product->variants->count() > 0,
+                'unit_type'        => $product->unit_type ?? 'piece',
+            ];
+        });
+
+        return response()->json(['data' => $items]);
+    }
+
     public function getProductVariants($id)
     {
         $product = Product::with(['variants', 'stock'])->findOrFail($id);
@@ -545,6 +599,90 @@ class SaleController extends Controller
             'items'   => $items,
             'customer' => $sale->customer,
             'reference' => $sale->reference,
+        ]);
+    }
+
+    public function printTableBill($table_id)
+    {
+        $table = \App\Models\Table::find($table_id);
+        if (!$table || $table->status !== 'occupied') {
+            return response('<h3>Table not occupied</h3>');
+        }
+
+        $sale = \App\Models\Sale::where('table_id', $table_id)
+            ->where('order_type', 'Dine-in')
+            ->orderBy('id', 'desc')
+            ->first();
+
+        if (!$sale) {
+            return response('<h3>No active sale found</h3>');
+        }
+
+        $products = explode(',', $sale->product);
+        $prices = explode(',', $sale->per_price);
+        $discounts = explode(',', $sale->per_discount);
+        $qtys = explode(',', $sale->qty);
+        $totals = explode(',', $sale->per_total);
+        $variant_ids = explode(',', $sale->variant_id ?? '');
+        $colors = json_decode($sale->color, true) ?: [];
+
+        $productMap = Product::whereIn('id', array_filter($products))->get()->keyBy('id');
+        $variantMap = \App\Models\ProductVariant::whereIn('id', array_filter($variant_ids))->pluck('variant_name', 'id');
+
+        $items = [];
+        $subtotal = 0;
+        $totalDiscount = 0;
+        foreach ($products as $index => $pid) {
+            if (empty($pid)) continue;
+
+            $prod = $productMap->get($pid);
+            $vId = $variant_ids[$index] ?? '';
+            $name = $prod ? $prod->item_name : $pid;
+            if ($vId && isset($variantMap[$vId])) {
+                $name .= ' - ' . $variantMap[$vId];
+            }
+
+            $label = '';
+            if (isset($colors[$index])) {
+                $rawLabel = $colors[$index];
+                $decoded = json_decode($rawLabel, true);
+                if (json_last_error() === JSON_ERROR_NONE && !is_null($decoded)) {
+                    $label = is_array($decoded) ? ($decoded[0] ?? '') : $decoded;
+                } else {
+                    $label = $rawLabel;
+                }
+            }
+
+            $price = (float)($prices[$index] ?? 0);
+            $qty = (float)($qtys[$index] ?? 0);
+            $total = (float)($totals[$index] ?? 0);
+            $gross = $price * $qty;
+            $disc = $gross - $total;
+
+            $subtotal += $total;
+            $totalDiscount += $disc;
+
+            $items[] = [
+                'name'   => $label ?: $name,
+                'price'  => $price,
+                'qty'    => $qty,
+                'disc'   => $disc,
+                'total'  => $total,
+            ];
+        }
+
+        $extraDiscount = (float)($sale->total_extradiscount ?? 0);
+        $totalDiscount += $extraDiscount;
+        $netTotal = $subtotal - $extraDiscount;
+
+        return view('admin_panel.sale.print_bill', [
+            'table_name' => $table->table_name,
+            'items' => $items,
+            'subtotal' => $subtotal,
+            'extra_discount' => $extraDiscount,
+            'total_discount' => $totalDiscount,
+            'net_total' => $netTotal,
+            'sale' => $sale,
         ]);
     }
 

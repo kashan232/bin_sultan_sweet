@@ -1609,13 +1609,14 @@ class ReportingController extends Controller
             $salesQuery->where('user_id', $userId);
         }
 
-        $sales = $salesQuery->select('id', 'invoice_no', 'total_net', 'created_at', 'cash', 'card', 'change')
+        $sales = $salesQuery->select('id', 'invoice_no', 'total_net', 'created_at', 'cash', 'card', 'change', 'per_price', 'qty', 'per_total', 'total_bill_amount', 'total_extradiscount')
             ->orderBy('created_at', 'asc')
             ->get();
 
         $totalSale = 0;
         $totalCash = 0;
         $totalCard = 0;
+        $totalDiscount = 0;
         
         foreach ($sales as $s) {
             $net = floatval($s->total_net);
@@ -1630,6 +1631,21 @@ class ReportingController extends Controller
             $totalSale += $net;
             $totalCard += $actualCard;
             $totalCash += $actualCash;
+
+            // Compute total discount for this sale
+            $prices = explode(',', $s->per_price ?? '');
+            $qtys = explode(',', $s->qty ?? '');
+            $totals = explode(',', $s->per_total ?? '');
+            $grossTotal = 0;
+            $itemTotal = 0;
+            $maxIdx = max(count($prices), count($qtys), count($totals));
+            for ($i = 0; $i < $maxIdx; $i++) {
+                $grossTotal += (float)($prices[$i] ?? 0) * (float)($qtys[$i] ?? 0);
+                $itemTotal += (float)($totals[$i] ?? 0);
+            }
+            $itemDiscount = $grossTotal - $itemTotal;
+            $extraDiscount = (float)($s->total_extradiscount ?? 0);
+            $totalDiscount += $itemDiscount + $extraDiscount;
         }
 
         // 2. Fetch Expenses
@@ -1665,6 +1681,7 @@ class ReportingController extends Controller
             'total_card' => $totalCard,
             'total_expense' => $totalExpense,
             'net_amount' => $totalSale - $totalExpense,
+            'total_discount' => $totalDiscount,
             'start_date' => $start,
             'end_date' => $end
         ]);
@@ -1694,12 +1711,13 @@ class ReportingController extends Controller
             $salesQuery->where('user_id', $userId);
         }
 
-        $sales = $salesQuery->select('id', 'invoice_no', 'total_net', 'created_at', 'cash', 'card', 'change')
+        $sales = $salesQuery->select('id', 'invoice_no', 'total_net', 'created_at', 'cash', 'card', 'change', 'per_price', 'qty', 'per_total', 'total_bill_amount', 'total_extradiscount')
             ->get();
 
         $totalSale = 0;
         $totalCash = 0;
         $totalCard = 0;
+        $totalDiscount = 0;
         
         foreach ($sales as $s) {
             $net = floatval($s->total_net);
@@ -1711,6 +1729,21 @@ class ReportingController extends Controller
             $totalSale += $net;
             $totalCard += $actualCard;
             $totalCash += $actualCash;
+
+            // Compute total discount for this sale
+            $prices = explode(',', $s->per_price ?? '');
+            $qtys = explode(',', $s->qty ?? '');
+            $totals = explode(',', $s->per_total ?? '');
+            $grossTotal = 0;
+            $itemTotal = 0;
+            $maxIdx = max(count($prices), count($qtys), count($totals));
+            for ($i = 0; $i < $maxIdx; $i++) {
+                $grossTotal += (float)($prices[$i] ?? 0) * (float)($qtys[$i] ?? 0);
+                $itemTotal += (float)($totals[$i] ?? 0);
+            }
+            $itemDiscount = $grossTotal - $itemTotal;
+            $extraDiscount = (float)($s->total_extradiscount ?? 0);
+            $totalDiscount += $itemDiscount + $extraDiscount;
         }
 
         $expenseQuery = DB::table('expense_vouchers')
@@ -1742,6 +1775,7 @@ class ReportingController extends Controller
             'totalSale' => $totalSale,
             'totalCash' => $totalCash,
             'totalCard' => $totalCard,
+            'totalDiscount' => $totalDiscount,
             'totalExpense' => $totalExpense,
             'netAmount' => $totalSale - $totalExpense,
             'startDate' => $start,

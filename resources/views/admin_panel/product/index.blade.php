@@ -515,7 +515,7 @@
                   <div class="pc-variant-list">
                     @foreach($product->variants as $variant)
                     <div>
-                      <span><strong>{{ $variant->variant_name }}</strong> - Rs {{ number_format($variant->price) }} <span style="color:var(--pc-text-muted)">({{ $product->unit_type == 'kg' ? number_format($product->total_stock ?? 0) : $variant->stock_qty }})</span></span>
+                      <span><strong>{{ $variant->variant_name }}</strong> - Rs {{ number_format($variant->price) }}                       @if($product->unit_type != 'kg')<span style="color:var(--pc-text-muted)">({{ $variant->stock_qty }})</span>@endif</span>
                       @if($variant->is_default)<span class="v-default">Default</span>@endif
                     </div>
                     @endforeach

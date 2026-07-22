@@ -148,7 +148,14 @@
           </thead>
           <tbody>
             @foreach($products as $product)
-            @php $pid = $product->id; @endphp
+            @php
+                $pid = $product->id;
+                $kgStockKg = 0;
+                if ($product->unit_type == 'kg') {
+                    $productLevelStock = $product->stocks->firstWhere('variant_id', null);
+                    $kgStockKg = $productLevelStock ? $productLevelStock->qty / 1000 : 0;
+                }
+            @endphp
             <tr class="be-product-row" data-pid="{{ $pid }}">
               <td style="font-weight:600;color:var(--be-text-muted);">{{ $loop->iteration }}</td>
               <td><input type="text" class="be-fld" name="product_name[{{ $pid }}]" value="{{ $product->item_name }}"></td>
@@ -199,7 +206,7 @@
               <td><input type="number" class="be-fld" step="0.01" name="variant_price[{{ $pid }}][]" value="{{ $firstVar->price }}"></td>
               <td><input type="number" class="be-fld" step="0.01" name="variant_cost_price[{{ $pid }}][]" value="{{ $firstVar->cost_price }}"></td>
               @if($product->unit_type == 'kg')
-              <td><input type="number" class="be-fld" step="0.01" name="kg_stock[{{ $pid }}]" value="{{ $firstVar->stock_qty }}"><input type="hidden" name="variant_stock[{{ $pid }}][]" value="0"></td>
+              <td><input type="number" class="be-fld" step="0.01" name="kg_stock[{{ $pid }}]" value="{{ $kgStockKg }}"><input type="hidden" name="variant_stock[{{ $pid }}][]" value="0"></td>
               @else
               <td><input type="number" class="be-fld" step="0.01" name="variant_stock[{{ $pid }}][]" value="{{ $firstVar->stock_qty }}"></td>
               @endif

@@ -69,6 +69,10 @@
         <span>Rs {{ number_format($totalCard, 0) }}</span>
     </div>
     <div class="row" style="font-size: 16px; color: #000;">
+        <span>TOTAL DISCOUNT (-)</span>
+        <span>Rs {{ number_format($totalDiscount ?? 0, 0) }}</span>
+    </div>
+    <div class="row" style="font-size: 16px; color: #000;">
         <span>TOTAL EXPENSES (-)</span>
         <span>Rs {{ number_format($totalExpense, 0) }}</span>
     </div>
