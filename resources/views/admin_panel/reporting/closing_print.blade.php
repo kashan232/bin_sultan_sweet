@@ -10,12 +10,12 @@
 @media print {
   body { margin: 0; padding: 0; }
   .no-print { display: none !important; }
-  @page { size: 80mm auto; margin: 0; }
+  @page { size: 58mm auto; margin: 0; }
 }
 
 body {
   font-family: 'Arial', sans-serif;
-  font-size: 12px;
+  font-size: 10px;
   color: #000 !important;
   background: #fff;
   margin: 0;
@@ -24,62 +24,60 @@ body {
 
 .receipt {
   width: 100%;
-  max-width: 290px;
+  max-width: 210px;
   margin: 0 auto;
-  padding: 10px 8px;
+  padding: 6px 4px;
 }
 
 .center { text-align: center; }
-.bold { font-weight: 900 !important; }
-.line { border-top: 1.5px dashed #000; margin: 5px 0; }
-.dbl-line { border-top: 2px solid #000; border-bottom: 2px solid #000; height: 3px; margin: 5px 0; }
+.bold { font-weight: 700 !important; }
+.line { border-top: 1px dashed #000; margin: 3px 0; }
+.dbl-line { border-top: 1.5px solid #000; border-bottom: 1.5px solid #000; height: 2px; margin: 3px 0; }
 
-.brand { font-size: 18px; font-weight: 900; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
-.address { font-size: 11px; font-weight: 900; line-height: 1.3; }
-.title { font-size: 14px; font-weight: 900; margin: 8px 0; text-transform: uppercase; letter-spacing: 1px; }
+.brand { font-size: 14px; font-weight: 700; margin-bottom: 1px; text-transform: uppercase; letter-spacing: 0.3px; }
+.address { font-size: 9px; font-weight: 700; line-height: 1.2; }
+.title { font-size: 11px; font-weight: 700; margin: 4px 0; text-transform: uppercase; letter-spacing: 0.5px; }
 
-table { width: 100%; border-collapse: collapse; margin: 5px 0; }
+table { width: 100%; border-collapse: collapse; margin: 3px 0; }
 th {
-  text-align: left; font-size: 11px; font-weight: 900;
-  border-bottom: 2px solid #000; padding: 4px 2px;
+  text-align: left; font-size: 9px; font-weight: 700;
+  border-bottom: 1.5px solid #000; padding: 2px 1px;
 }
 td {
-  font-size: 11px; font-weight: 900;
-  padding: 4px 2px; vertical-align: top;
+  font-size: 9px; font-weight: 700;
+  padding: 2px 1px; vertical-align: top;
   border-bottom: 1px dotted #000;
 }
 table tbody tr:last-child td { border-bottom: none; }
 .r { text-align: right; }
 
-.info-row { display: flex; justify-content: space-between; font-size: 11px; margin: 3px 0; font-weight: 900; }
+.info-row { display: flex; justify-content: space-between; font-size: 9px; margin: 2px 0; font-weight: 700; }
 
 .print-btn {
-  display: block; margin: 15px auto; padding: 12px 30px;
-  background: #000; color: #fff; border: none; border-radius: 6px;
-  font-size: 16px; font-weight: 900; cursor: pointer; text-transform: uppercase;
+  display: block; margin: 10px auto; padding: 8px 20px;
+  background: #000; color: #fff; border: none; border-radius: 4px;
+  font-size: 12px; font-weight: 700; cursor: pointer; text-transform: uppercase;
 }
 
-.item-name { font-size: 11px; font-weight: 900; line-height: 1.2; }
-.item-code { font-size: 10px; font-weight: 900; color: #333; }
+.item-name { font-size: 9px; font-weight: 700; line-height: 1.1; word-break: break-word; }
+.item-code { font-size: 8px; font-weight: 700; color: #333; }
 </style>
 </head>
 <body>
 
-<button class="print-btn no-print" onclick="window.print()">
-  <span style="font-size:18px;margin-right:4px;">🖨️</span> Print Closing
-</button>
+<button class="print-btn no-print" onclick="window.print()">Print Closing</button>
 
 <div class="receipt">
   <div class="center">
     <div class="brand">Bin Sultan</div>
-    <div class="address" style="font-size:14px;margin-bottom:2px;">Sweets & Bakers</div>
+    <div class="address" style="font-size:11px;margin-bottom:1px;">Sweets & Bakers</div>
     <div class="address">Latifabad no 6 Near Shadman Hall Hyderabad</div>
     <div class="address">Ph: 022 2786661</div>
   </div>
 
-  <div class="dbl-line" style="margin-top:8px;"></div>
+  <div class="dbl-line" style="margin-top:5px;"></div>
   <div class="center title">Daily Closing Report</div>
-  <div class="dbl-line" style="margin-bottom:8px;"></div>
+  <div class="dbl-line" style="margin-bottom:5px;"></div>
 
   <div class="info-row"><span>Date:</span><span>{{ $dateLabel }}</span></div>
   <div class="info-row"><span>Shift:</span><span>{{ $timeLabel }}</span></div>
@@ -90,10 +88,10 @@ table tbody tr:last-child td { border-bottom: none; }
   <table>
     <thead>
       <tr>
-        <th style="width:38%;">Item</th>
-        <th style="width:22%;" class="r">Purch + Prod</th>
-        <th style="width:20%;" class="r">Sold</th>
-        <th style="width:20%;" class="r">Available</th>
+        <th style="width:34%;">Item</th>
+        <th style="width:22%;" class="r">Purch+Prod</th>
+        <th style="width:22%;" class="r">Sold</th>
+        <th style="width:22%;" class="r">Balance</th>
       </tr>
     </thead>
     <tbody>
@@ -110,31 +108,30 @@ table tbody tr:last-child td { border-bottom: none; }
       @endphp
       <tr>
         <td>
-          <div class="item-name">{{ $itemName }}</div>
-          <div class="item-code">[{{ $itemCode }}]</div>
+          <div class="item-name">{{ $itemName }} <span class="item-code">[{{ $itemCode }}]</span></div>
         </td>
-        <td class="r">{{ number_format($purchProd, $isKg ? 0 : 0) }}{{ $isKg ? 'g' : '' }}</td>
-        <td class="r">{{ number_format($sold, $isKg ? 0 : 0) }}{{ $isKg ? 'g' : '' }}</td>
-        <td class="r">{{ number_format($avail, $isKg ? 0 : 0) }}{{ $isKg ? 'g' : '' }}</td>
+        <td class="r">{{ $isKg ? number_format($purchProd/1000, 2) : number_format($purchProd) }}{{ $isKg ? 'kg' : '' }}</td>
+        <td class="r">{{ $isKg ? number_format($sold/1000, 2) : number_format($sold) }}{{ $isKg ? 'kg' : '' }}</td>
+        <td class="r">{{ $isKg ? number_format($avail/1000, 2) : number_format($avail) }}{{ $isKg ? 'kg' : '' }}</td>
       </tr>
       @empty
-      <tr><td colspan="4" class="center" style="padding:10px 0;">No data for this period</td></tr>
+      <tr><td colspan="4" class="center" style="padding:8px 0;">No data for this period</td></tr>
       @endforelse
     </tbody>
   </table>
 
   <div class="line"></div>
-  <div style="display:flex;justify-content:space-between;font-weight:900;font-size:12px;padding:3px 2px;">
+  <div style="display:flex;justify-content:space-between;font-weight:700;font-size:9px;padding:2px 1px;">
     <span>TOTALS</span>
     <span>{{ number_format($tp) }}</span>
     <span>{{ number_format($ts) }}</span>
     <span>{{ number_format($ta) }}</span>
   </div>
-  <div class="line" style="margin-bottom:8px;"></div>
+  <div class="line" style="margin-bottom:5px;"></div>
 
-  <div class="center bold" style="font-size:11px;margin-top:6px;">
+  <div class="center bold" style="font-size:9px;margin-top:4px;">
     <div>Total Items: {{ $total }}</div>
-    <div style="margin-top:4px;">— End of Report —</div>
+    <div style="margin-top:3px;">— End of Report —</div>
   </div>
 </div>
 
