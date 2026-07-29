@@ -97,6 +97,8 @@ class ReportingController extends Controller
             ->groupBy('production_entry_items.product_id', 'production_entry_items.variant_id')
             ->get();
 
+        $hasVariantIdInPRItems = \Illuminate\Support\Facades\Schema::hasColumn('purchase_return_items', 'variant_id');
+
         $purchaseReturnsQuery = DB::table('purchase_return_items')
             ->join('purchase_returns', 'purchase_returns.id', '=', 'purchase_return_items.purchase_return_id')
             ->whereIn('purchase_return_items.product_id', $productIds)
@@ -104,8 +106,12 @@ class ReportingController extends Controller
         if ($resetTime) {
             $purchaseReturnsQuery->where('purchase_returns.created_at', '>=', $resetTime);
         }
-        $purchaseReturns = $purchaseReturnsQuery->select('purchase_return_items.product_id', 'purchase_return_items.variant_id', DB::raw('SUM(purchase_return_items.qty) as total_qty'))
-            ->groupBy('purchase_return_items.product_id', 'purchase_return_items.variant_id')
+        if ($hasVariantIdInPRItems) {
+            $purchaseReturnsQuery->select('purchase_return_items.product_id', 'purchase_return_items.variant_id', DB::raw('SUM(purchase_return_items.qty) as total_qty'));
+        } else {
+            $purchaseReturnsQuery->select('purchase_return_items.product_id', DB::raw('0 as variant_id'), DB::raw('SUM(purchase_return_items.qty) as total_qty'));
+        }
+        $purchaseReturns = $purchaseReturnsQuery->groupBy('purchase_return_items.product_id', $hasVariantIdInPRItems ? 'purchase_return_items.variant_id' : DB::raw('0'))
             ->get();
 
         // BEFORE-PERIOD: transactions BEFORE startDate (for opening stock calculation)
@@ -131,8 +137,12 @@ class ReportingController extends Controller
             ->whereIn('purchase_return_items.product_id', $productIds)
             ->where('purchase_returns.return_date', '<', $startDate);
         if ($resetTime) { $prBeforeQuery->where('purchase_returns.created_at', '>=', $resetTime); }
-        $prBefore = $prBeforeQuery->select('purchase_return_items.product_id', 'purchase_return_items.variant_id', DB::raw('SUM(purchase_return_items.qty) as total_qty'))
-            ->groupBy('purchase_return_items.product_id', 'purchase_return_items.variant_id')->get();
+        if ($hasVariantIdInPRItems) {
+            $prBeforeQuery->select('purchase_return_items.product_id', 'purchase_return_items.variant_id', DB::raw('SUM(purchase_return_items.qty) as total_qty'));
+        } else {
+            $prBeforeQuery->select('purchase_return_items.product_id', DB::raw('0 as variant_id'), DB::raw('SUM(purchase_return_items.qty) as total_qty'));
+        }
+        $prBefore = $prBeforeQuery->groupBy('purchase_return_items.product_id', $hasVariantIdInPRItems ? 'purchase_return_items.variant_id' : DB::raw('0'))->get();
 
         // Mapping helper: key = pid_vid (use 0 for null variant)
         $mapP    = []; foreach($purchases    as $p)  { $k = $p->product_id  . '_' . ($p->variant_id  ?? 0); $mapP[$k]    = ($mapP[$k]    ?? 0) + $p->total_qty; }
