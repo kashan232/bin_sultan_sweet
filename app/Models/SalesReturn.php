@@ -9,7 +9,7 @@ class SalesReturn extends Model
     use HasFactory;
 
     protected $fillable = [
-        'sale_id',
+        'sale_id', 'user_id',
         'customer', 'reference', 'product', 'product_code', 'brand',
         'unit', 'per_price', 'per_discount', 'qty', 'per_total',
         'total_amount_Words', 'total_bill_amount', 'total_extradiscount',
@@ -20,5 +20,10 @@ class SalesReturn extends Model
     public function sale()
     {
         return $this->belongsTo(Sale::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

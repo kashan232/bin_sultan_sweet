@@ -50,6 +50,10 @@
         <span>{{ $salesCount }}</span>
     </div>
     <div class="row">
+        <span>Total Returns Count:</span>
+        <span>{{ $returnsCount }}</span>
+    </div>
+    <div class="row">
         <span>Total Expenses Count:</span>
         <span>{{ $expensesCount }}</span>
     </div>
@@ -69,6 +73,18 @@
         <span>Rs {{ number_format($totalCard, 0) }}</span>
     </div>
     <div class="row" style="font-size: 16px; color: #000;">
+        <span>TOTAL RETURNS (-)</span>
+        <span>Rs {{ number_format($totalReturn, 0) }}</span>
+    </div>
+    <div class="row" style="font-size: 14px; margin-left: 10px;">
+        <span>- CASH RETURNS</span>
+        <span>Rs {{ number_format($totalReturnCash, 0) }}</span>
+    </div>
+    <div class="row" style="font-size: 14px; margin-left: 10px;">
+        <span>- CARD RETURNS</span>
+        <span>Rs {{ number_format($totalReturnCard, 0) }}</span>
+    </div>
+    <div class="row" style="font-size: 16px; color: #000;">
         <span>TOTAL DISCOUNT (-)</span>
         <span>Rs {{ number_format($totalDiscount ?? 0, 0) }}</span>
     </div>
@@ -80,13 +96,13 @@
     <div class="divider"></div>
 
     <div class="net-box">
-        <div style="font-size: 12px;">NET BALANCE (Sales - Exp)</div>
+        <div style="font-size: 12px;">NET BALANCE (Sales - Returns - Exp)</div>
         <div class="bold">Rs {{ number_format($netAmount, 0) }}</div>
     </div>
     
     <div class="net-box" style="border-style: dashed;">
-        <div style="font-size: 12px;">CASH IN DRAWER (Cash - Exp)</div>
-        <div class="bold">Rs {{ number_format($totalCash - $totalExpense, 0) }}</div>
+        <div style="font-size: 12px;">CASH IN DRAWER (Cash - Return Cash - Exp)</div>
+        <div class="bold">Rs {{ number_format($totalCash - $totalReturnCash - $totalExpense, 0) }}</div>
     </div>
 
     <div class="divider"></div>

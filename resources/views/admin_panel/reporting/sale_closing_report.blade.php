@@ -362,6 +362,11 @@
         <div class="sc-stat-label">Discount (-)</div>
         <div class="sc-stat-value" id="summaryDiscount">Rs 0</div>
       </div>
+      <div class="sc-stat" style="background:linear-gradient(135deg,#e11d48,#f43f5e);color:#fff;">
+        <div class="sc-stat-icon"><i class="la la-undo"></i></div>
+        <div class="sc-stat-label">Returns (-)</div>
+        <div class="sc-stat-value" id="summaryReturns">Rs 0</div>
+      </div>
       <div class="sc-stat" style="background:linear-gradient(135deg,#ea580c,#fb923c);color:#fff;">
         <div class="sc-stat-icon"><i class="la la-money-bill-wave"></i></div>
         <div class="sc-stat-label">Expenses (-)</div>
@@ -381,7 +386,7 @@
 
     {{-- ═══ DETAIL TABLES ═══ --}}
     <div class="row g-3">
-      <div class="col-lg-6">
+      <div class="col-lg-4">
         <div class="sc-detail">
           <div class="sc-detail-body">
             <div class="sc-detail-title"><i class="la la-shopping-cart" style="color:#059669;"></i> Sales Detailed</div>
@@ -402,7 +407,28 @@
           </div>
         </div>
       </div>
-      <div class="col-lg-6">
+      <div class="col-lg-4">
+        <div class="sc-detail">
+          <div class="sc-detail-body">
+            <div class="sc-detail-title"><i class="la la-undo" style="color:#e11d48;"></i> Returns Detailed</div>
+            <div class="sc-tbl-wrap">
+              <table class="sc-tbl">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Invoice</th>
+                    <th class="text-end">Amount</th>
+                  </tr>
+                </thead>
+                <tbody id="returnsBody">
+                  <tr class="sc-row-empty"><td colspan="3"><i class="la la-inbox"></i>No returns found</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
         <div class="sc-detail">
           <div class="sc-detail-body">
             <div class="sc-detail-title"><i class="la la-money-bill-wave" style="color:#ea580c;"></i> Expenses Detailed</div>
@@ -478,6 +504,7 @@ $(document).ready(function() {
         animateValue('summarySale', res.total_sale);
         animateValue('summaryCash', res.total_cash);
         animateValue('summaryCard', res.total_card);
+        animateValue('summaryReturns', res.total_return);
         animateValue('summaryExpense', res.total_expense);
         $('#summaryDiscount').text('Rs ' + (res.total_discount || 0).toLocaleString());
 
@@ -488,18 +515,16 @@ $(document).ready(function() {
           ? 'linear-gradient(135deg,#dc2626,#f87171)'
           : 'linear-gradient(135deg,#0b1a33,#1e40af)');
 
-        let drawerAmount = res.total_cash - res.total_expense;
+        let drawerAmount = res.total_cash - res.total_return_cash - res.total_expense;
         animateValue('summaryDrawer', drawerAmount);
 
         // Sales table
         let saleHtml = '';
         if (res.sales && res.sales.length) {
           res.sales.forEach(function(s, idx) {
-            let d = new Date(s.created_at);
-            let dateStr = d.getDate() + '-' + (d.getMonth()+1) + '-' + d.getFullYear();
-            let timeStr = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+            let dt = formatDateTime(s.created_at);
             saleHtml += '<tr class="sc-fade-in" style="animation-delay:' + (idx * 0.03) + 's">'
-              + '<td class="sc-date">' + dateStr + ' <span style="font-size:.7rem;color:#b0b8c8">' + timeStr + '</span></td>'
+              + '<td class="sc-date">' + dt.date + ' <span style="font-size:.7rem;color:#b0b8c8">' + dt.time + '</span></td>'
               + '<td class="sc-inv">' + (s.invoice_no || '—') + '</td>'
               + '<td class="sc-amt text-end">' + parseFloat(s.total_net).toLocaleString() + '</td>'
               + '</tr>';
@@ -508,6 +533,23 @@ $(document).ready(function() {
           saleHtml = '<tr class="sc-row-empty"><td colspan="3"><i class="la la-inbox"></i>No sales found</td></tr>';
         }
         $('#saleBody').html(saleHtml);
+
+        // Returns table
+        let returnsHtml = '';
+        if (res.returns && res.returns.length) {
+          res.returns.forEach(function(r, idx) {
+            let rDt = formatDateTime(r.created_at);
+            let sDt = formatDateTime(r.original_sale_date);
+            returnsHtml += '<tr class="sc-fade-in" style="animation-delay:' + (idx * 0.03) + 's">'
+              + '<td class="sc-date">' + rDt.date + ' <span style="font-size:.7rem;color:#b0b8c8">' + rDt.time + '</span></td>'
+              + '<td class="sc-inv">' + (r.original_invoice_no || '—') + '<br><small style="font-size:.72rem;color:#64748b;font-weight:500;">Sale: ' + sDt.date + ' ' + sDt.time + '</small></td>'
+              + '<td class="sc-amt text-end">' + parseFloat(r.total_net).toLocaleString() + '</td>'
+              + '</tr>';
+          });
+        } else {
+          returnsHtml = '<tr class="sc-row-empty"><td colspan="3"><i class="la la-inbox"></i>No returns found</td></tr>';
+        }
+        $('#returnsBody').html(returnsHtml);
 
         // Expenses table
         let expHtml = '';
@@ -531,6 +573,29 @@ $(document).ready(function() {
         Swal.fire({ icon: 'error', title: 'Failed', text: msg, timer: 3000, showConfirmButton: false });
       }
     });
+  }
+
+  // ─── Format date & 12-hour AM/PM time ───
+  function formatDateTime(dateStr) {
+    if (!dateStr) return { date: '—', time: '' };
+    let d = new Date(dateStr);
+    if (isNaN(d.getTime())) return { date: dateStr, time: '' };
+    
+    let day = d.getDate().toString().padStart(2, '0');
+    let month = (d.getMonth() + 1).toString().padStart(2, '0');
+    let year = d.getFullYear();
+    
+    let hours = d.getHours();
+    let minutes = d.getMinutes().toString().padStart(2, '0');
+    let ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    let hoursStr = hours.toString().padStart(2, '0');
+    
+    return {
+      date: day + '-' + month + '-' + year,
+      time: hoursStr + ':' + minutes + ' ' + ampm
+    };
   }
 
   // ─── Animate number counting ───

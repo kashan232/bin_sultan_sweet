@@ -65,7 +65,15 @@ class ReportingController extends Controller
         $products = $pQuery->get();
         $productIds = $products->pluck('id')->toArray();
 
+        $codeToIdMap = [];
+        $nameToIdMap = [];
+        foreach (\App\Models\Product::all() as $prod) {
+            $codeToIdMap[trim($prod->item_code)] = $prod->id;
+            $nameToIdMap[trim($prod->item_name)] = $prod->id;
+        }
+
         // 2. Bulk queries grouped by product_id AND variant_id with DATE filters
+        // IN-PERIOD: transactions within [startDate, endDate]
         $purchasesQuery = DB::table('purchase_items')
             ->join('purchases', 'purchases.id', '=', 'purchase_items.purchase_id')
             ->whereIn('purchase_items.product_id', $productIds)
@@ -96,21 +104,43 @@ class ReportingController extends Controller
         if ($resetTime) {
             $purchaseReturnsQuery->where('purchase_returns.created_at', '>=', $resetTime);
         }
-        $purchaseReturns = $purchaseReturnsQuery->select('purchase_return_items.product_id', DB::raw('SUM(purchase_return_items.qty) as total_qty'))
-            ->groupBy('purchase_return_items.product_id')
+        $purchaseReturns = $purchaseReturnsQuery->select('purchase_return_items.product_id', 'purchase_return_items.variant_id', DB::raw('SUM(purchase_return_items.qty) as total_qty'))
+            ->groupBy('purchase_return_items.product_id', 'purchase_return_items.variant_id')
             ->get();
 
-        $currStocks = DB::table('stocks')
-            ->whereIn('product_id', $productIds)
-            ->select('product_id', 'variant_id', 'qty')
-            ->get();
+        // BEFORE-PERIOD: transactions BEFORE startDate (for opening stock calculation)
+        // These give us the opening stock at the beginning of startDate
+        $purchBeforeQuery = DB::table('purchase_items')
+            ->join('purchases', 'purchases.id', '=', 'purchase_items.purchase_id')
+            ->whereIn('purchase_items.product_id', $productIds)
+            ->where('purchases.purchase_date', '<', $startDate);
+        if ($resetTime) { $purchBeforeQuery->where('purchases.created_at', '>=', $resetTime); }
+        $purchBefore = $purchBeforeQuery->select('purchase_items.product_id', 'purchase_items.variant_id', DB::raw('SUM(purchase_items.qty) as total_qty'))
+            ->groupBy('purchase_items.product_id', 'purchase_items.variant_id')->get();
+
+        $prodBeforeQuery = DB::table('production_entry_items')
+            ->join('production_entries', 'production_entries.id', '=', 'production_entry_items.production_entry_id')
+            ->whereIn('production_entry_items.product_id', $productIds)
+            ->whereDate('production_entries.production_date', '<', $startDate);
+        if ($resetTime) { $prodBeforeQuery->where('production_entries.created_at', '>=', $resetTime); }
+        $prodBefore = $prodBeforeQuery->select('production_entry_items.product_id', 'production_entry_items.variant_id', DB::raw('SUM(production_entry_items.qty_stock) as total_qty'))
+            ->groupBy('production_entry_items.product_id', 'production_entry_items.variant_id')->get();
+
+        $prBeforeQuery = DB::table('purchase_return_items')
+            ->join('purchase_returns', 'purchase_returns.id', '=', 'purchase_return_items.purchase_return_id')
+            ->whereIn('purchase_return_items.product_id', $productIds)
+            ->where('purchase_returns.return_date', '<', $startDate);
+        if ($resetTime) { $prBeforeQuery->where('purchase_returns.created_at', '>=', $resetTime); }
+        $prBefore = $prBeforeQuery->select('purchase_return_items.product_id', 'purchase_return_items.variant_id', DB::raw('SUM(purchase_return_items.qty) as total_qty'))
+            ->groupBy('purchase_return_items.product_id', 'purchase_return_items.variant_id')->get();
 
         // Mapping helper: key = pid_vid (use 0 for null variant)
-        $mapP = []; foreach($purchases as $p) { $mapP[$p->product_id . '_' . ($p->variant_id ?? 0)] = $p->total_qty; }
-        $mapProd = []; foreach($productions as $pd) { $mapProd[$pd->product_id . '_' . ($pd->variant_id ?? 0)] = ($mapProd[$pd->product_id . '_' . ($pd->variant_id ?? 0)] ?? 0) + $pd->total_qty; }
-        // purchase_return_items has no variant_id — map by product only (key pid_0)
-        $mapPR = []; foreach($purchaseReturns as $pr) { $mapPR[$pr->product_id . '_0'] = ($mapPR[$pr->product_id . '_0'] ?? 0) + $pr->total_qty; }
-        $mapS = []; foreach($currStocks as $cs) { $mapS[$cs->product_id . '_' . ($cs->variant_id ?? 0)] = $cs->qty; }
+        $mapP    = []; foreach($purchases    as $p)  { $k = $p->product_id  . '_' . ($p->variant_id  ?? 0); $mapP[$k]    = ($mapP[$k]    ?? 0) + $p->total_qty; }
+        $mapProd = []; foreach($productions  as $pd) { $k = $pd->product_id . '_' . ($pd->variant_id ?? 0); $mapProd[$k] = ($mapProd[$k] ?? 0) + $pd->total_qty; }
+        $mapPR   = []; foreach($purchaseReturns as $pr) { $k = $pr->product_id . '_' . ($pr->variant_id ?? 0); $mapPR[$k] = ($mapPR[$k] ?? 0) + $pr->total_qty; }
+        $mapPB   = []; foreach($purchBefore  as $p)  { $k = $p->product_id  . '_' . ($p->variant_id  ?? 0); $mapPB[$k]   = ($mapPB[$k]   ?? 0) + $p->total_qty; }
+        $mapProdB= []; foreach($prodBefore   as $pd) { $k = $pd->product_id . '_' . ($pd->variant_id ?? 0); $mapProdB[$k]= ($mapProdB[$k]?? 0) + $pd->total_qty; }
+        $mapPRB  = []; foreach($prBefore     as $pr) { $k = $pr->product_id . '_' . ($pr->variant_id ?? 0); $mapPRB[$k]  = ($mapPRB[$k]  ?? 0) + $pr->total_qty; }
 
         // Sales processing (by product and variant) with DATE filter
         $hasVariantIdInSales = \Illuminate\Support\Facades\Schema::hasColumn('sales', 'variant_id');
@@ -140,7 +170,11 @@ class ReportingController extends Controller
         }
 
         $hasVariantIdInReturns = \Illuminate\Support\Facades\Schema::hasColumn('sales_returns', 'variant_id');
+        $hasCodeInReturns = \Illuminate\Support\Facades\Schema::hasColumn('sales_returns', 'product_code');
         $allReturnsQuery = DB::table('sales_returns')->whereBetween('created_at', [$startDT, $endDT])->whereNotNull('product')->select('product', 'qty');
+        if ($hasCodeInReturns) {
+            $allReturnsQuery->addSelect('product_code');
+        }
         if ($hasVariantIdInReturns) {
             $allReturnsQuery->addSelect('variant_id');
         }
@@ -152,89 +186,86 @@ class ReportingController extends Controller
         $retMap = [];
         foreach ($allReturns as $r) {
             $pids = explode(',', $r->product);
+            $codes = isset($r->product_code) ? explode(',', $r->product_code ?? '') : [];
             $qtys = explode(',', $r->qty);
             $vids = $hasVariantIdInReturns ? explode(',', $r->variant_id ?? '') : [];
             
             foreach ($pids as $idx => $pid) {
                 $pid = trim($pid);
                 if ($pid === '') continue;
+                $code = trim($codes[$idx] ?? '');
+                $qty = floatval($qtys[$idx] ?? 0);
+                if ($qty <= 0) continue;
+
+                // Resolve real Product ID
+                $resolvedPid = null;
+                if (is_numeric($pid) && (isset($codeToIdMap[$pid]) || \App\Models\Product::where('id', intval($pid))->exists())) {
+                    $resolvedPid = intval($pid);
+                } elseif (!empty($code) && isset($codeToIdMap[$code])) {
+                    $resolvedPid = $codeToIdMap[$code];
+                } elseif (!empty($pid) && isset($nameToIdMap[$pid])) {
+                    $resolvedPid = $nameToIdMap[$pid];
+                } elseif (is_numeric($pid)) {
+                    $resolvedPid = intval($pid);
+                }
+
+                if (!$resolvedPid) continue;
+
                 $vid = trim($vids[$idx] ?? '0');
                 if ($vid === '') $vid = '0';
-                $key = $pid . '_' . $vid;
-                $retMap[$key] = ($retMap[$key] ?? 0) + floatval($qtys[$idx] ?? 0);
+                $key = $resolvedPid . '_' . $vid;
+                $retMap[$key] = ($retMap[$key] ?? 0) + $qty;
             }
         }
 
-        // 3. Transactions AFTER end_date to perform backward calculation for Balance
-        $purchAfterQuery = DB::table('purchase_items')
-            ->join('purchases', 'purchases.id', '=', 'purchase_items.purchase_id')
-            ->whereIn('purchase_items.product_id', $productIds)
-            ->where('purchases.purchase_date', '>', $endDate);
-        if ($resetTime) {
-            $purchAfterQuery->where('purchases.created_at', '>=', $resetTime);
-        }
-        $purchAfter = $purchAfterQuery->select('purchase_items.product_id', 'purchase_items.variant_id', DB::raw('SUM(purchase_items.qty) as total_qty'))
-            ->groupBy('purchase_items.product_id', 'purchase_items.variant_id')
-            ->get();
-        $mapPAft = []; foreach($purchAfter as $p) { $mapPAft[$p->product_id . '_' . ($p->variant_id ?? '0')] = $p->total_qty; }
+        // BEFORE-PERIOD: sales and sale-returns BEFORE startDate (for opening stock)
+        $allSalesBeforeQ = DB::table('sales')->where('created_at', '<', $startDT)->whereNotNull('product')->select('product', 'qty');
+        if ($hasVariantIdInSales) { $allSalesBeforeQ->addSelect('variant_id'); }
+        if ($resetTime) { $allSalesBeforeQ->where('created_at', '>=', $resetTime); }
+        $allSalesBefore = $allSalesBeforeQ->get();
 
-        $prodAfterQuery = DB::table('production_entry_items')
-            ->join('production_entries', 'production_entries.id', '=', 'production_entry_items.production_entry_id')
-            ->whereIn('production_entry_items.product_id', $productIds)
-            ->whereDate('production_entries.production_date', '>', $endDate);
-        if ($resetTime) {
-            $prodAfterQuery->where('production_entries.created_at', '>=', $resetTime);
-        }
-        $prodAfter = $prodAfterQuery->select('production_entry_items.product_id', 'production_entry_items.variant_id', DB::raw('SUM(production_entry_items.qty_stock) as total_qty'))
-            ->groupBy('production_entry_items.product_id', 'production_entry_items.variant_id')
-            ->get();
-        $mapProdAft = []; foreach($prodAfter as $pd) { $mapProdAft[$pd->product_id . '_' . ($pd->variant_id ?? 0)] = ($mapProdAft[$pd->product_id . '_' . ($pd->variant_id ?? 0)] ?? 0) + $pd->total_qty; }
-
-        $prAfterQuery = DB::table('purchase_return_items')
-            ->join('purchase_returns', 'purchase_returns.id', '=', 'purchase_return_items.purchase_return_id')
-            ->whereIn('purchase_return_items.product_id', $productIds)
-            ->where('purchase_returns.return_date', '>', $endDate);
-        if ($resetTime) {
-            $prAfterQuery->where('purchase_returns.created_at', '>=', $resetTime);
-        }
-        $prAfter = $prAfterQuery->select('purchase_return_items.product_id', DB::raw('SUM(purchase_return_items.qty) as total_qty'))
-            ->groupBy('purchase_return_items.product_id')
-            ->get();
-        $mapPRAft = []; foreach($prAfter as $pr) { $mapPRAft[$pr->product_id . '_0'] = ($mapPRAft[$pr->product_id . '_0'] ?? 0) + $pr->total_qty; }
-
-        $allSalesAfterQ = DB::table('sales')->where('created_at', '>', $endDT)->whereNotNull('product')->select('product', 'qty');
-        if ($hasVariantIdInSales) { $allSalesAfterQ->addSelect('variant_id'); }
-        if ($resetTime) {
-            $allSalesAfterQ->where('created_at', '>=', $resetTime);
-        }
-        $allSalesAfter = $allSalesAfterQ->get();
-        
-        $soldAftMap = [];
-        foreach ($allSalesAfter as $s) {
+        $soldBefMap = [];
+        foreach ($allSalesBefore as $s) {
             $pids = explode(',', $s->product); $qtys = explode(',', $s->qty); $vids = $hasVariantIdInSales ? explode(',', $s->variant_id ?? '') : [];
             foreach ($pids as $idx => $pid) {
                 $pid = trim($pid); if ($pid === '') continue;
                 $vid = trim($vids[$idx] ?? '0'); if ($vid === '') $vid = '0';
                 $key = $pid . '_' . $vid;
-                $soldAftMap[$key] = ($soldAftMap[$key] ?? 0) + floatval($qtys[$idx] ?? 0);
+                $soldBefMap[$key] = ($soldBefMap[$key] ?? 0) + floatval($qtys[$idx] ?? 0);
             }
         }
 
-        $allRetAfterQ = DB::table('sales_returns')->where('created_at', '>', $endDT)->whereNotNull('product')->select('product', 'qty');
-        if ($hasVariantIdInReturns) { $allRetAfterQ->addSelect('variant_id'); }
-        if ($resetTime) {
-            $allRetAfterQ->where('created_at', '>=', $resetTime);
-        }
-        $allRetAfter = $allRetAfterQ->get();
-        
-        $retAftMap = [];
-        foreach ($allRetAfter as $r) {
-            $pids = explode(',', $r->product); $qtys = explode(',', $r->qty); $vids = $hasVariantIdInReturns ? explode(',', $r->variant_id ?? '') : [];
+        $allRetBeforeQ = DB::table('sales_returns')->where('created_at', '<', $startDT)->whereNotNull('product')->select('product', 'qty');
+        if ($hasCodeInReturns) { $allRetBeforeQ->addSelect('product_code'); }
+        if ($hasVariantIdInReturns) { $allRetBeforeQ->addSelect('variant_id'); }
+        if ($resetTime) { $allRetBeforeQ->where('created_at', '>=', $resetTime); }
+        $allRetBefore = $allRetBeforeQ->get();
+
+        $retBefMap = [];
+        foreach ($allRetBefore as $r) {
+            $pids = explode(',', $r->product);
+            $codes = isset($r->product_code) ? explode(',', $r->product_code ?? '') : [];
+            $qtys = explode(',', $r->qty);
+            $vids = $hasVariantIdInReturns ? explode(',', $r->variant_id ?? '') : [];
             foreach ($pids as $idx => $pid) {
                 $pid = trim($pid); if ($pid === '') continue;
+                $code = trim($codes[$idx] ?? '');
+                $qty = floatval($qtys[$idx] ?? 0);
+                if ($qty <= 0) continue;
+                $resolvedPid = null;
+                if (is_numeric($pid) && (isset($codeToIdMap[$pid]) || \App\Models\Product::where('id', intval($pid))->exists())) {
+                    $resolvedPid = intval($pid);
+                } elseif (!empty($code) && isset($codeToIdMap[$code])) {
+                    $resolvedPid = $codeToIdMap[$code];
+                } elseif (!empty($pid) && isset($nameToIdMap[$pid])) {
+                    $resolvedPid = $nameToIdMap[$pid];
+                } elseif (is_numeric($pid)) {
+                    $resolvedPid = intval($pid);
+                }
+                if (!$resolvedPid) continue;
                 $vid = trim($vids[$idx] ?? '0'); if ($vid === '') $vid = '0';
-                $key = $pid . '_' . $vid;
-                $retAftMap[$key] = ($retAftMap[$key] ?? 0) + floatval($qtys[$idx] ?? 0);
+                $key = $resolvedPid . '_' . $vid;
+                $retBefMap[$key] = ($retBefMap[$key] ?? 0) + $qty;
             }
         }
 
@@ -261,26 +292,26 @@ class ReportingController extends Controller
             }
         }
 
-        // ---- STOCK ADJUSTMENTS AFTER end_date ----
-        $adjAfterQuery = DB::table('stock_adjustment_items as sai')
+        // ---- STOCK ADJUSTMENTS BEFORE startDate (for opening stock) ----
+        $adjBeforeQuery = DB::table('stock_adjustment_items as sai')
             ->join('stock_adjustments as sa', 'sa.id', '=', 'sai.adjustment_id')
             ->whereIn('sai.product_id', $productIds)
-            ->where('sa.adjustment_date', '>', $endDate);
+            ->where('sa.adjustment_date', '<', $startDate);
         if ($resetTime) {
-            $adjAfterQuery->where('sa.created_at', '>=', $resetTime);
+            $adjBeforeQuery->where('sa.created_at', '>=', $resetTime);
         }
-        $adjAfter = $adjAfterQuery->select('sai.product_id', 'sa.type', DB::raw('SUM(sai.qty_stock) as total_qty'))
+        $adjBefore = $adjBeforeQuery->select('sai.product_id', 'sa.type', DB::raw('SUM(sai.qty_stock) as total_qty'))
             ->groupBy('sai.product_id', 'sa.type')
             ->get();
 
-        $mapAdjIncAft = [];
-        $mapAdjDecAft = [];
-        foreach ($adjAfter as $adj) {
+        $mapAdjIncBef = [];
+        $mapAdjDecBef = [];
+        foreach ($adjBefore as $adj) {
             $k = $adj->product_id . '_0';
             if ($adj->type === 'increase') {
-                $mapAdjIncAft[$k] = ($mapAdjIncAft[$k] ?? 0) + $adj->total_qty;
+                $mapAdjIncBef[$k] = ($mapAdjIncBef[$k] ?? 0) + $adj->total_qty;
             } else {
-                $mapAdjDecAft[$k] = ($mapAdjDecAft[$k] ?? 0) + $adj->total_qty;
+                $mapAdjDecBef[$k] = ($mapAdjDecBef[$k] ?? 0) + $adj->total_qty;
             }
         }
 
@@ -303,38 +334,41 @@ class ReportingController extends Controller
                         $produced += (float)($mapProd[$p->id . '_0'] ?? 0);
                     }
 
-                    $pReturn   = (float)($mapPR[$p->id . '_0'] ?? 0); 
-                    if ($pReturn == 0) { }
+                    $pReturn   = (float)($mapPR[$key] ?? 0); 
+                    if ($v->is_default || $p->variants->first()->id == $v->id) {
+                        $pReturn += (float)($mapPR[$p->id . '_0'] ?? 0);
+                    }
                     $sold      = (float)($soldMap[$key] ?? 0);
                     $sReturn   = (float)($retMap[$key] ?? 0);
-                    $balance   = (float)($mapS[$key] ?? 0);
-                    
-                    // If this is default variant, also include base product stock if any
                     if ($v->is_default || $p->variants->first()->id == $v->id) {
-                        $balance += (float)($mapS[$p->id . '_0'] ?? 0);
+                        $sold    += (float)($soldMap[$p->id . '_0'] ?? 0);
+                        $sReturn += (float)($retMap[$p->id . '_0'] ?? 0);
                     }
 
                     $adjInc    = (float)($mapAdjInc[$p->id . '_0'] ?? 0);
                     $adjDec    = (float)($mapAdjDec[$p->id . '_0'] ?? 0);
 
-                    $purchAft = (float)($mapPAft[$key] ?? 0);
-                    $prodAft  = (float)($mapProdAft[$key] ?? 0); 
+                    // FORWARD CALCULATION: Opening stock = all transactions BEFORE startDate
+                    $purchBef   = (float)($mapPB[$key] ?? 0);
+                    $prodBef    = (float)($mapProdB[$key] ?? 0);
                     if ($v->is_default || $p->variants->first()->id == $v->id) {
-                        $prodAft += (float)($mapProdAft[$p->id . '_0'] ?? 0);
+                        $prodBef += (float)($mapProdB[$p->id . '_0'] ?? 0);
                     }
-                    $prAft    = (float)($mapPRAft[$p->id . '_0'] ?? 0);
-                    $soldAft  = (float)($soldAftMap[$key] ?? 0);
-                    $sRetAft  = (float)($retAftMap[$key] ?? 0);
-                    $adjIncAft = (float)($mapAdjIncAft[$p->id . '_0'] ?? 0);
-                    $adjDecAft = (float)($mapAdjDecAft[$p->id . '_0'] ?? 0);
-                    
-                    $closingStock = $balance - $purchAft - $prodAft - $sRetAft + $soldAft + $prAft - $adjIncAft + $adjDecAft;
-                    $openingStock = $closingStock - $purchased - $produced - $sReturn + $sold + $pReturn - $adjInc + $adjDec;
+                    $pRetBef    = (float)($mapPRB[$key] ?? 0);
+                    if ($v->is_default || $p->variants->first()->id == $v->id) {
+                        $pRetBef += (float)($mapPRB[$p->id . '_0'] ?? 0);
+                    }
+                    $soldBef    = (float)($soldBefMap[$key] ?? 0);
+                    $sRetBef    = (float)($retBefMap[$key] ?? 0);
+                    if ($v->is_default || $p->variants->first()->id == $v->id) {
+                        $soldBef += (float)($soldBefMap[$p->id . '_0'] ?? 0);
+                        $sRetBef += (float)($retBefMap[$p->id . '_0'] ?? 0);
+                    }
+                    $adjIncBef  = (float)($mapAdjIncBef[$p->id . '_0'] ?? 0);
+                    $adjDecBef  = (float)($mapAdjDecBef[$p->id . '_0'] ?? 0);
 
-                    if ($balance <= 0) {
-                        $closingStock = 0;
-                        $openingStock = 0;
-                    }
+                    $openingStock = $purchBef + $prodBef + $sRetBef - $soldBef - $pRetBef + $adjIncBef - $adjDecBef;
+                    $closingStock = $openingStock + $purchased + $produced + $sReturn - $sold - $pReturn + $adjInc - $adjDec;
 
                     $rows[] = [
                         'item_code'       => $code,
@@ -359,37 +393,38 @@ class ReportingController extends Controller
                 $code = $p->item_code;
 
                 $purchased_kg = (float)($mapP[$key] ?? 0);
-                $produced  = (float)($mapProd[$key] ?? 0); // already in grams from qty_stock
+                $produced  = (float)($mapProd[$key] ?? 0);
                 $pReturn   = (float)($mapPR[$p->id . '_0'] ?? 0);
-                $balance   = (float)($mapS[$key] ?? 0); // already in grams
 
-                // For KG products: purchased qty in purchase_items is in KG → convert to grams
-                // For KG products: sold qty in sales is in KG → convert to grams
                 $rawSold    = (float)($soldMap[$key] ?? 0);
                 $rawSReturn = (float)($retMap[$key] ?? 0);
-                
-                $purchAft_kg = (float)($mapPAft[$key] ?? 0);
-                $prodAft     = (float)($mapProdAft[$key] ?? 0); 
-                $prAft       = (float)($mapPRAft[$p->id . '_0'] ?? 0);
-                $rawSoldAft  = (float)($soldAftMap[$key] ?? 0);
-                $rawSRetAft  = (float)($retAftMap[$key] ?? 0);
+
+                // BEFORE-PERIOD values for opening stock
+                $rawPurchBef  = (float)($mapPB[$key] ?? 0);
+                $rawProdBef   = (float)($mapProdB[$key] ?? 0);
+                $rawPRetBef   = (float)($mapPRB[$p->id . '_0'] ?? 0);
+                $rawSoldBef   = (float)($soldBefMap[$key] ?? 0);
+                $rawSRetBef   = (float)($retBefMap[$key] ?? 0);
 
                 if ($is_kg) {
                     $purchased = $purchased_kg * 1000;
                     $sold      = $rawSold * 1000;
                     $sReturn   = $rawSReturn * 1000;
+                    $pReturn   = $pReturn * 1000;
 
-                    $purchAft = $purchAft_kg * 1000;
-                    $soldAft  = $rawSoldAft * 1000;
-                    $sRetAft  = $rawSRetAft * 1000;
+                    $purchBef  = $rawPurchBef * 1000;
+                    $soldBef   = $rawSoldBef * 1000;
+                    $sRetBef   = $rawSRetBef * 1000;
+                    $pRetBef   = $rawPRetBef * 1000;
                 } else {
                     $purchased = $purchased_kg;
                     $sold      = $rawSold;
                     $sReturn   = $rawSReturn;
 
-                    $purchAft = $purchAft_kg;
-                    $soldAft  = $rawSoldAft;
-                    $sRetAft  = $rawSRetAft;
+                    $purchBef  = $rawPurchBef;
+                    $soldBef   = $rawSoldBef;
+                    $sRetBef   = $rawSRetBef;
+                    $pRetBef   = $rawPRetBef;
                 }
 
                 if ($is_kg && $p->variants->count() > 0) {
@@ -398,46 +433,41 @@ class ReportingController extends Controller
                         $vKey = $p->id . '_' . $v->id;
                         $mul = floatval($v->size_value); 
                         
-                        // If variant size is in KG, multiply by 1000 to get grams
                         if ($v->size_unit === 'kg') {
                             $mul *= 1000;
                         }
 
-                        $vPurchRaw = (float)($mapP[$vKey] ?? 0);
-                        $vPurchAftRaw = (float)($mapPAft[$vKey] ?? 0);
+                        $vPurchRaw    = (float)($mapP[$vKey] ?? 0);
+                        $vPurchBefRaw = (float)($mapPB[$vKey] ?? 0);
 
-                        // Assuming purchase qty for KG items is in KG
                         $purchased += $vPurchRaw * 1000;
-                        $purchAft  += $vPurchAftRaw * 1000;
+                        $purchBef  += $vPurchBefRaw * 1000;
 
                         $produced  += (float)($mapProd[$vKey] ?? 0);
-                        $prodAft   += (float)($mapProdAft[$vKey] ?? 0);
+                        $rawProdBef+= (float)($mapProdB[$vKey] ?? 0);
 
-                        $pReturn   += (float)($mapPR[$vKey] ?? 0);
-                        $prAft     += (float)($mapPRAft[$vKey] ?? 0);
+                        $pReturn   += (float)($mapPR[$vKey] ?? 0) * 1000;
+                        $pRetBef   += (float)($mapPRB[$vKey] ?? 0) * 1000;
 
                         $sold      += (float)($soldMap[$vKey] ?? 0) * $mul;
-                        $soldAft   += (float)($soldAftMap[$vKey] ?? 0) * $mul;
+                        $soldBef   += (float)($soldBefMap[$vKey] ?? 0) * $mul;
 
                         $sReturn   += (float)($retMap[$vKey] ?? 0) * $mul;
-                        $sRetAft   += (float)($retAftMap[$vKey] ?? 0) * $mul;
-
-                        $balance   += (float)($mapS[$vKey] ?? 0);
+                        $sRetBef   += (float)($retBefMap[$vKey] ?? 0) * $mul;
                     }
+                    $prodBef = $rawProdBef;
+                } else {
+                    $prodBef = $rawProdBef;
                 }
 
-                $adjInc    = (float)($mapAdjInc[$p->id . '_0'] ?? 0);
-                $adjDec    = (float)($mapAdjDec[$p->id . '_0'] ?? 0);
-                $adjIncAft = (float)($mapAdjIncAft[$p->id . '_0'] ?? 0);
-                $adjDecAft = (float)($mapAdjDecAft[$p->id . '_0'] ?? 0);
+                $adjInc     = (float)($mapAdjInc[$p->id . '_0'] ?? 0);
+                $adjDec     = (float)($mapAdjDec[$p->id . '_0'] ?? 0);
+                $adjIncBef  = (float)($mapAdjIncBef[$p->id . '_0'] ?? 0);
+                $adjDecBef  = (float)($mapAdjDecBef[$p->id . '_0'] ?? 0);
 
-                $closingStock = $balance - $purchAft - $prodAft - $sRetAft + $soldAft + $prAft - $adjIncAft + $adjDecAft;
-                $openingStock = $closingStock - $purchased - $produced - $sReturn + $sold + $pReturn - $adjInc + $adjDec;
+                $openingStock = $purchBef + $prodBef + $sRetBef - $soldBef - $pRetBef + $adjIncBef - $adjDecBef;
+                $closingStock = $openingStock + $purchased + $produced + $sReturn - $sold - $pReturn + $adjInc - $adjDec;
 
-                if ($balance <= 0) {
-                    $closingStock = 0;
-                    $openingStock = 0;
-                }
 
                 $rows[] = [
                     'item_code'       => $code,
@@ -1673,14 +1703,58 @@ class ReportingController extends Controller
             $processedExpenses[] = $ex;
         }
 
+        // 3. Fetch Returns
+        $returnsQuery = DB::table('sales_returns')
+            ->join('sales', 'sales_returns.sale_id', '=', 'sales.id')
+            ->whereBetween('sales_returns.created_at', [$start, $end]);
+
+        if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
+            $returnsQuery->where('sales_returns.user_id', auth()->id());
+        } elseif ($userId && $userId !== 'all') {
+            $returnsQuery->where('sales_returns.user_id', $userId);
+        }
+
+        $returns = $returnsQuery->select(
+                'sales_returns.id', 
+                'sales_returns.sale_id', 
+                'sales_returns.total_net', 
+                'sales_returns.created_at', 
+                'sales_returns.cash', 
+                'sales_returns.card',
+                'sales.invoice_no as original_invoice_no',
+                'sales.created_at as original_sale_date'
+            )
+            ->orderBy('sales_returns.created_at', 'asc')
+            ->get();
+
+        $totalReturn = 0;
+        $totalReturnCash = 0;
+        $totalReturnCard = 0;
+
+        foreach ($returns as $r) {
+            $net = floatval($r->total_net);
+            $crd = floatval($r->card);
+            
+            $actualCard = min($net, $crd);
+            $actualCash = $net - $actualCard;
+            
+            $totalReturn += $net;
+            $totalReturnCard += $actualCard;
+            $totalReturnCash += $actualCash;
+        }
+
         return response()->json([
             'sales' => $sales,
             'expenses' => $processedExpenses,
+            'returns' => $returns,
             'total_sale' => $totalSale,
             'total_cash' => $totalCash,
             'total_card' => $totalCard,
             'total_expense' => $totalExpense,
-            'net_amount' => $totalSale - $totalExpense,
+            'total_return' => $totalReturn,
+            'total_return_cash' => $totalReturnCash,
+            'total_return_card' => $totalReturnCard,
+            'net_amount' => $totalSale - $totalReturn - $totalExpense,
             'total_discount' => $totalDiscount,
             'start_date' => $start,
             'end_date' => $end
@@ -1763,6 +1837,34 @@ class ReportingController extends Controller
             $totalExpense += array_sum($amounts);
         }
 
+        // Fetch Returns
+        $returnsQuery = DB::table('sales_returns')
+            ->whereBetween('created_at', [$start, $end]);
+
+        if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
+            $returnsQuery->where('user_id', auth()->id());
+        } elseif ($userId && $userId !== 'all') {
+            $returnsQuery->where('user_id', $userId);
+        }
+
+        $returns = $returnsQuery->get();
+
+        $totalReturn = 0;
+        $totalReturnCash = 0;
+        $totalReturnCard = 0;
+
+        foreach ($returns as $r) {
+            $net = floatval($r->total_net);
+            $crd = floatval($r->card);
+            
+            $actualCard = min($net, $crd);
+            $actualCash = $net - $actualCard;
+            
+            $totalReturn += $net;
+            $totalReturnCard += $actualCard;
+            $totalReturnCash += $actualCash;
+        }
+
         $userName = 'All Users';
         if ($userId && $userId !== 'all') {
             $user = \App\Models\User::find($userId);
@@ -1777,11 +1879,15 @@ class ReportingController extends Controller
             'totalCard' => $totalCard,
             'totalDiscount' => $totalDiscount,
             'totalExpense' => $totalExpense,
-            'netAmount' => $totalSale - $totalExpense,
+            'totalReturn' => $totalReturn,
+            'totalReturnCash' => $totalReturnCash,
+            'totalReturnCard' => $totalReturnCard,
+            'netAmount' => $totalSale - $totalReturn - $totalExpense,
             'startDate' => $start,
             'endDate' => $end,
             'salesCount' => $sales->count(),
             'expensesCount' => $expenses->count(),
+            'returnsCount' => $returns->count(),
             'userName' => $userName
         ]);
     }

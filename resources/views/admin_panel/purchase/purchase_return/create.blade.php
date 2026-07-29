@@ -154,7 +154,7 @@
                             </thead>
                             <tbody>
                                 @foreach($purchase->items as $item)
-                                <tr data-product-id="{{ $item->product_id }}" data-price="{{ $item->price }}" data-unit="{{ $item->unit }}" data-item-disc="{{ $item->item_discount ?? 0 }}" data-item-note="{{ $item->note ?? '' }}">
+                                <tr data-product-id="{{ $item->product_id }}" data-variant-id="{{ $item->variant_id ?? '' }}" data-price="{{ $item->price }}" data-unit="{{ $item->unit }}" data-item-disc="{{ $item->item_discount ?? 0 }}" data-item-note="{{ $item->note ?? '' }}">
                                     <td class="text-center">
                                         <input type="checkbox" class="pr-chk select-return-item" {{ ($item->available_qty ?? $item->qty) <= 0 ? 'disabled' : '' }}>
                                     </td>
@@ -256,6 +256,7 @@
         $('#purchasedItemsTable').on('change', '.select-return-item', function() {
             const $row = $(this).closest('tr');
             const productId = $row.data('product-id').toString();
+            const variantId = ($row.data('variant-id') || '').toString();
             const price = num($row.data('price'));
             const unit = $row.data('unit') || '';
             const itemDisc = num($row.data('item-disc'));
@@ -266,11 +267,14 @@
 
             if (this.checked) {
                 if (availableQty <= 0) { this.checked = false; return; }
-                if ($('#returnItemsTable tbody tr[data-product-id="' + productId + '"]').length) return;
+                if ($('#returnItemsTable tbody tr[data-product-id="' + productId + '"][data-variant-id="' + variantId + '"]').length) return;
                 let returnQtyDefault = (availableQty < 1) ? availableQty : 1;
                 const rowHtml = `
-<tr data-product-id="${productId}">
-    <td style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${productName}">${productName}<input type="hidden" name="product_id[]" value="${productId}"></td>
+<tr data-product-id="${productId}" data-variant-id="${variantId}">
+    <td style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${productName}">${productName}
+        <input type="hidden" name="product_id[]" value="${productId}">
+        <input type="hidden" name="variant_id[]" value="${variantId}">
+    </td>
     <td>
         <input type="hidden" name="item_note[]" class="item-note-hidden" value="${$row.data('item-note') || ''}">
         <input type="text" class="pr-input pr-input-sm form-control item-note-visible" value="${$row.data('item-note') || ''}" placeholder="Note" style="width:100%;">
@@ -293,14 +297,14 @@
         <div class="pr-muted">Max: ${availableQty}</div>
     </td>
     <td><input type="text" name="total[]" class="pr-input pr-input-sm form-control row-total" readonly style="width:100%;"></td>
-    <td class="text-center"><button type="button" class="pr-btn pr-btn-danger" style="padding:4px 10px;font-size:11px;"><i class="bi bi-x"></i></button></td>
+    <td class="text-center"><button type="button" class="pr-btn pr-btn-danger remove-return-item" style="padding:4px 10px;font-size:11px;"><i class="bi bi-x"></i></button></td>
 </tr>`;
                 $('#returnItemsTable tbody').append(rowHtml);
                 let displayAvail = parseFloat((availableQty - returnQtyDefault).toFixed(2));
                 $row.find('.available-qty').html('<span class="pr-badge pr-badge-avail">' + displayAvail + '</span>');
                 if (displayAvail <= 0) $row.find('.select-return-item').prop('disabled', true);
             } else {
-                const $returnRow = $('#returnItemsTable tbody tr[data-product-id="' + productId + '"]');
+                const $returnRow = $('#returnItemsTable tbody tr[data-product-id="' + productId + '"][data-variant-id="' + variantId + '"]');
                 if ($returnRow.length) {
                     const prevQty = num($returnRow.find('.qty-input').val());
                     const currentAvailable = num($row.find('.available-qty').text());

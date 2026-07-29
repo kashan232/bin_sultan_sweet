@@ -59,7 +59,12 @@ class ProductController extends Controller
             'brand',
             'stock',
             'discountProduct',
-            'variants.stock'
+            'stocks' => function($q) {
+                $q->where('branch_id', 1)->where('warehouse_id', 1);
+            },
+            'variants.stocks' => function($q) {
+                $q->where('branch_id', 1)->where('warehouse_id', 1);
+            }
         ])
             ->withSum(['stocks as total_stock' => function($q) {
                 $q->where('branch_id', 1)->where('warehouse_id', 1);
@@ -80,6 +85,11 @@ class ProductController extends Controller
             ->orderBy('item_code', 'desc')
             ->paginate(100);
 
+        foreach ($products as $p) {
+            foreach ($p->variants as $v) {
+                $v->setRelation('product', $p);
+            }
+        }
 
         // 🔧 THIS LINE FIXES EVERYTHING
         $categories = Category::orderBy('id', 'desc')->get();
@@ -480,7 +490,22 @@ class ProductController extends Controller
 
     public function edit($id)
     {
-        $product = Product::with(['category_relation', 'sub_category_relation', 'unit', 'brand', 'variants'])->findOrFail($id);
+        $product = Product::with([
+            'category_relation',
+            'sub_category_relation',
+            'unit',
+            'brand',
+            'stocks' => function($q) {
+                $q->where('branch_id', 1)->where('warehouse_id', 1);
+            },
+            'variants.stocks' => function($q) {
+                $q->where('branch_id', 1)->where('warehouse_id', 1);
+            }
+        ])->findOrFail($id);
+
+        foreach ($product->variants as $v) {
+            $v->setRelation('product', $product);
+        }
         $categories = Category::select('id', 'name')->get();
         $units = Unit::select('id', 'name')->get();
         $brands = Brand::select('id', 'name')->get();
@@ -603,8 +628,19 @@ class ProductController extends Controller
         }
         $products = Product::with([
             'category_relation', 'sub_category_relation', 'unit', 'brand',
-            'variants.stock', 'stocks'
+            'variants.stocks' => function($q) {
+                $q->where('branch_id', 1)->where('warehouse_id', 1);
+            },
+            'stocks' => function($q) {
+                $q->where('branch_id', 1)->where('warehouse_id', 1);
+            }
         ])->whereIn('id', $ids)->orderBy('item_code')->get();
+
+        foreach ($products as $p) {
+            foreach ($p->variants as $v) {
+                $v->setRelation('product', $p);
+            }
+        }
 
         $categories = Category::orderBy('id', 'desc')->get();
         $brands = Brand::select('id', 'name')->get();

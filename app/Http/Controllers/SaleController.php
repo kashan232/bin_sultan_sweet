@@ -27,7 +27,7 @@ class SaleController extends Controller
 
             // 🔹 Restrict non-admin users to their own sales
             // Exempt User ID 1 (Super Admin) to ensure they can see/filter everything
-            if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
+            if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin') && !auth()->user()->hasRole('super-admin')) {
                  $query->where('user_id', auth()->id());
             }
 
@@ -73,7 +73,7 @@ class SaleController extends Controller
             }
 
             // 🔹 Total Records (before filtering)
-            $totalRecords = auth()->user()->hasRole('Admin')
+            $totalRecords = (auth()->id() === 1 || auth()->user()->hasRole('Admin') || auth()->user()->hasRole('super-admin'))
                 ? Sale::count()
                 : Sale::where('user_id', auth()->id())->count();
             
@@ -152,21 +152,17 @@ class SaleController extends Controller
                 $totals = explode(',', $sale->per_total);
                 $vIds = explode(',', $sale->variant_id);
                 
-                $barcodeHtml = '';
                 $productHtml = '';
-                
                 foreach($prodIds as $i => $pid) {
                     $p = $productsMap[$pid] ?? null;
                     $vId = $vIds[$i] ?? null;
                     $v = $vId ? ($variantsMap[$vId] ?? null) : null;
                     
-                    $barcodeHtml .= ($p ? $p->barcode_path : 'N/A') . '<br>';
-                    
                     $pName = $p ? $p->item_name : 'N/A';
                     if ($v) {
                         $pName .= ' (' . ($v->size_label ?: $v->variant_name) . ')';
                     }
-                    $productHtml .= $pName . '<br>';
+                    $productHtml .= '<div class="sale-prod-row"><i class="fa-solid fa-cube text-primary opacity-75 me-1" style="font-size:10px;"></i>' . e($pName) . '</div>';
                 }
 
                 // Helper closure for formatting
@@ -176,48 +172,55 @@ class SaleController extends Controller
                 };
 
                 // Build HTML for other list columns
-                $cleanedQtys = array_map(function($q) use ($fmt) { return $fmt($q); }, $qtys);
-                $qtyHtml = implode('<br>', $cleanedQtys);
+                $qtyHtml = '';
+                foreach($qtys as $q) $qtyHtml .= '<div class="sale-num-row">' . $fmt($q) . '</div>';
 
                 $priceHtml = '';
-                foreach($prices as $pr) $priceHtml .= $fmt($pr) . '<br>';
+                foreach($prices as $pr) $priceHtml .= '<div class="sale-num-row">Rs ' . $fmt($pr) . '</div>';
                 
                 $discHtml = '';
-                foreach($discounts as $d) $discHtml .= $fmt($d) . '<br>';
+                foreach($discounts as $d) $discHtml .= '<div class="sale-num-row">' . ($d > 0 ? 'Rs ' . $fmt($d) : '-') . '</div>';
 
                 $totalHtml = '';
-                foreach($totals as $t) $totalHtml .= $fmt($t) . '<br>';
+                foreach($totals as $t) $totalHtml .= '<div class="sale-num-row fw-semibold">Rs ' . $fmt($t) . '</div>';
 
                 // Status Badge
-                $statusBadge = '<span class="badge bg-secondary">Unknown</span>';
-                if($sale->sale_status === null) 
-                    $statusBadge = '<span class="badge bg-success">Sale</span>';
-                elseif($sale->sale_status == 1) 
-                    $statusBadge = '<span class="badge bg-danger">Return</span>';
+                $statusBadge = '<span class="sale-status-badge status-sale"><i class="fa-solid fa-circle-check me-1"></i>Sale</span>';
+                if($sale->sale_status == 1) {
+                    $statusBadge = '<span class="sale-status-badge status-return"><i class="fa-solid fa-rotate-left me-1"></i>Return</span>';
+                }
 
                 // Action Buttons
-                $actions = '<div class="btn-group btn-group-sm" role="group">
-                    <a href="'.route('sales.recepit', $sale->id).'" class="btn btn-dark" target="_blank"><i class="fas fa-print"></i> Print Bill</a>
-                    <a href="'.route('sales.invoice', $sale->id).'" class="btn btn-info text-white" target="_blank"><i class="fas fa-file-invoice"></i> Invoice</a>
-                    <a href="'.route('sales.dc', $sale->id).'" class="btn btn-success text-white" target="_blank">DC</a>
-                    <a href="'.route('sales.edit', $sale->id).'" class="btn btn-primary"><i class="fas fa-edit"></i> Edit</a>
-                    <a href="'.route('sales.return.create', $sale->id).'" class="btn btn-warning"><i class="fas fa-undo"></i> Return</a>
+                $actions = '<div class="sale-action-group">
+                    <a href="'.route('sales.recepit', $sale->id).'" class="sale-action-btn btn-print" target="_blank" title="Print Bill"><i class="fa-solid fa-print"></i><span>Bill</span></a>
+                    <a href="'.route('sales.invoice', $sale->id).'" class="sale-action-btn btn-invoice" target="_blank" title="Invoice"><i class="fa-solid fa-file-invoice"></i><span>Invoice</span></a>
+                    <a href="'.route('sales.dc', $sale->id).'" class="sale-action-btn btn-dc" target="_blank" title="DC"><i class="fa-solid fa-truck-fast"></i><span>DC</span></a>
+                    <a href="'.route('sales.edit', $sale->id).'" class="sale-action-btn btn-edit" title="Edit"><i class="fa-solid fa-pen-to-square"></i><span>Edit</span></a>
+                    <a href="'.route('sales.return.create', $sale->id).'" class="sale-action-btn btn-return" title="Return"><i class="fa-solid fa-rotate-left"></i><span>Return</span></a>
                 </div>';
                 
                 // Date formatting
-                $date = \Carbon\Carbon::parse($sale->created_at)->format('d-m-Y h:i A');
+                $date = '<div class="sale-date-badge"><i class="fa-regular fa-clock me-1 text-muted"></i>' . \Carbon\Carbon::parse($sale->created_at)->format('d M Y, h:i A') . '</div>';
+
+                $userBadge = '<span class="sale-user-badge"><i class="fa-solid fa-user-tie me-1 opacity-75"></i>' . e($sale->user ? $sale->user->name : 'N/A') . '</span>';
+
+                $invoiceChip = '<span class="sale-invoice-chip"><i class="fa-solid fa-hashtag me-1 text-primary"></i>' . e($sale->invoice_no) . '</span>';
+
+                $customerBadge = '<div class="sale-customer-name"><i class="fa-solid fa-user me-1 text-secondary opacity-75"></i>' . e($sale->customer_relation->customer_name ?? 'Walk-in Customer') . '</div>';
+
+                $totalBillAmount = '<span class="sale-total-highlight">Rs. ' . $fmt($sale->total_bill_amount) . '</span>';
 
                 $data[] = [
                     $skip + $index + 1, // S.No
-                    $sale->user ? $sale->user->name : 'N/A', // User Name
-                    $sale->invoice_no,
-                    $sale->customer_relation->customer_name ?? 'Walk-in Customer',
+                    $userBadge,
+                    $invoiceChip,
+                    $customerBadge,
                     $productHtml,
                     $qtyHtml,
                     $priceHtml,
                     $discHtml,
                     $totalHtml,
-                    '<span class="fw-bold fs-5">' . $fmt($sale->total_bill_amount) . '</span>', // Bold Total Amount
+                    $totalBillAmount,
                     $date,
                     $statusBadge,
                     $actions
@@ -236,9 +239,16 @@ class SaleController extends Controller
             ->value('amount') ?? 0;
 
         // Calculate today's sales for the logged-in user
-        $todaySales = Sale::where('user_id', auth()->id())
+        $rawTodaySales = Sale::where('user_id', auth()->id())
             ->whereDate('created_at', date('Y-m-d'))
             ->sum('total_bill_amount');
+
+        // Calculate today's returns for the logged-in user
+        $todayReturns = \App\Models\SalesReturn::where('user_id', auth()->id())
+            ->whereDate('created_at', date('Y-m-d'))
+            ->sum('total_net');
+
+        $todaySales = $rawTodaySales - $todayReturns;
 
         // Calculate today's expenses for the logged-in user
         $todayExpense = \App\Models\ExpenseVoucher::where('user_id', auth()->id())
@@ -1620,6 +1630,7 @@ class SaleController extends Controller
             // We'll build combined arrays to save in sales_returns
             $combined_products   = [];
             $combined_codes      = [];
+            $combined_variant_ids= [];
             $combined_brands     = [];
             $combined_units      = [];
             $combined_prices     = [];
@@ -1658,9 +1669,10 @@ class SaleController extends Controller
                 if ($qty <= 0) continue;
 
                 // Push to combined arrays (preserve name/code even if id missing)
-                $combined_products[]  = $name;
-                $combined_codes[]     = $code;
-                $combined_brands[]    = $brand;
+                $combined_products[]    = $name;
+                $combined_codes[]       = $code;
+                $combined_variant_ids[] = $vId;
+                $combined_brands[]      = $brand;
                 $combined_units[]     = $unit;
                 $combined_prices[]    = (string)$price;
                 $combined_discounts[] = (string)$disc;
@@ -1784,10 +1796,12 @@ class SaleController extends Controller
             // Save sales_returns row (CSV arrays + json color array)
             $saleReturn = new \App\Models\SalesReturn();
             $saleReturn->sale_id = $saleId;
+            $saleReturn->user_id = auth()->id();
             $saleReturn->customer = $request->customer;
             $saleReturn->reference = $request->reference;
             $saleReturn->product = implode(',', $combined_products);
             $saleReturn->product_code = implode(',', $combined_codes);
+            $saleReturn->variant_id = implode(',', $combined_variant_ids);
             $saleReturn->brand = implode(',', $combined_brands);
             $saleReturn->unit = implode(',', $combined_units);
             $saleReturn->per_price = implode(',', $combined_prices);

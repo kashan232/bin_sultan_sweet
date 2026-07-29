@@ -219,20 +219,28 @@ class PurchaseController extends Controller
                 if ($validated['purchase_to'] === 'shop') {
 
                     // ➕ SHOP STOCK
-                    $stock = Stock::where('branch_id', auth()->id())
-                        ->where('product_id', $productId)
-                        ->where('variant_id', $variantId)
-                        ->first();
+                    $stockQuery = Stock::where('product_id', $productId)
+                        ->where('branch_id', 1)
+                        ->where('warehouse_id', 1);
+
+                    if ($variantId) {
+                        $stockQuery->where('variant_id', $variantId);
+                    } else {
+                        $stockQuery->whereNull('variant_id');
+                    }
+
+                    $stock = $stockQuery->first();
 
                     if ($stock) {
                         $stock->qty += $qtyStock;
                         $stock->save();
                     } else {
                         Stock::create([
-                            'branch_id'  => auth()->id(),
-                            'product_id' => $productId,
-                            'variant_id' => $variantId,
-                            'qty'        => $qtyStock,
+                            'branch_id'    => 1,
+                            'warehouse_id' => 1,
+                            'product_id'   => $productId,
+                            'variant_id'   => $variantId,
+                            'qty'          => $qtyStock,
                         ]);
                     }
                 } else {
@@ -778,7 +786,12 @@ class PurchaseController extends Controller
         foreach ($purchase->items as $item) {
             $returnedQty = \App\Models\PurchaseReturnItem::whereHas('purchaseReturn', function ($q) use ($purchase) {
                 $q->where('purchase_id', $purchase->id);
-            })->where('product_id', $item->product_id)->sum('qty');
+            })
+            ->where('product_id', $item->product_id)
+            ->when($item->variant_id, function ($q) use ($item) {
+                $q->where('variant_id', $item->variant_id);
+            })
+            ->sum('qty');
 
             $item->available_qty = max(0, $item->qty - $returnedQty);
         }
@@ -800,6 +813,8 @@ class PurchaseController extends Controller
 
             'product_id'   => 'required|array',
             'product_id.*' => 'required|exists:products,id',
+
+            'variant_id'   => 'nullable|array',
 
             'qty'          => 'required|array',
             'qty.*'        => 'required|numeric|min:0.01',
@@ -839,6 +854,7 @@ class PurchaseController extends Controller
 
             foreach ($validated['product_id'] as $i => $productId) {
 
+                $variantId  = $request->variant_id[$i] ?? null;
                 $qty        = $validated['qty'][$i];
                 $price      = $validated['price'][$i];
                 $discPerPc  = $validated['item_disc'][$i] ?? 0;
@@ -851,6 +867,7 @@ class PurchaseController extends Controller
                 \App\Models\PurchaseReturnItem::create([
                     'purchase_return_id' => $return->id,
                     'product_id'         => $productId,
+                    'variant_id'         => $variantId ?: null,
                     'qty'                => $qty,
                     'price'              => $price,
                     'item_discount'      => $discPerPc,
@@ -865,18 +882,21 @@ class PurchaseController extends Controller
 
                 // stock minus
                 if ($request->purchase_to === 'warehouse') {
-
-                    $stock = Stock::where('warehouse_id', $validated['warehouse_id'] ?? null)
-                        ->where('product_id', $productId)
-                        ->first();
+                    $stockQuery = Stock::where('warehouse_id', $validated['warehouse_id'] ?? null)
+                        ->where('product_id', $productId);
                 } else {
-
-                    // SHOP stock
-                    $stock = Stock::whereNull('warehouse_id')
-                        ->where('product_id', $productId)
-                        ->first();
+                    $stockQuery = Stock::where('branch_id', 1)
+                        ->where('warehouse_id', 1)
+                        ->where('product_id', $productId);
                 }
 
+                if ($variantId) {
+                    $stockQuery->where('variant_id', $variantId);
+                } else {
+                    $stockQuery->whereNull('variant_id');
+                }
+
+                $stock = $stockQuery->first();
 
                 if ($stock) {
                     $stock->qty -= $qty;

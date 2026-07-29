@@ -52,4 +52,26 @@ class ProductVariant extends Model
     {
         return $this->hasOne(Stock::class, 'variant_id');
     }
+
+    public function stocks()
+    {
+        return $this->hasMany(Stock::class, 'variant_id');
+    }
+
+    public function getStockQtyAttribute($value)
+    {
+        if ($this->relationLoaded('stocks')) {
+            $qty = $this->stocks->sum('qty');
+            if ($this->relationLoaded('product')) {
+                if ($this->is_default || ($this->product->variants->first() && $this->product->variants->first()->id == $this->id)) {
+                    if ($this->product->relationLoaded('stocks')) {
+                        $qty += $this->product->stocks->where('variant_id', null)->sum('qty');
+                    }
+                }
+            }
+            return $qty;
+        }
+        return $value;
+    }
 }
+
