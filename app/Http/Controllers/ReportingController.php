@@ -1708,10 +1708,12 @@ class ReportingController extends Controller
             ->join('sales', 'sales_returns.sale_id', '=', 'sales.id')
             ->whereBetween('sales_returns.created_at', [$start, $end]);
 
+        $userCol = \Illuminate\Support\Facades\Schema::hasColumn('sales_returns', 'user_id') ? 'sales_returns.user_id' : 'sales.user_id';
+
         if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
-            $returnsQuery->where('sales_returns.user_id', auth()->id());
+            $returnsQuery->where($userCol, auth()->id());
         } elseif ($userId && $userId !== 'all') {
-            $returnsQuery->where('sales_returns.user_id', $userId);
+            $returnsQuery->where($userCol, $userId);
         }
 
         $returns = $returnsQuery->select(
@@ -1839,12 +1841,15 @@ class ReportingController extends Controller
 
         // Fetch Returns
         $returnsQuery = DB::table('sales_returns')
-            ->whereBetween('created_at', [$start, $end]);
+            ->join('sales', 'sales_returns.sale_id', '=', 'sales.id')
+            ->whereBetween('sales_returns.created_at', [$start, $end]);
+
+        $userCol = \Illuminate\Support\Facades\Schema::hasColumn('sales_returns', 'user_id') ? 'sales_returns.user_id' : 'sales.user_id';
 
         if (auth()->id() !== 1 && !auth()->user()->hasRole('Admin')) {
-            $returnsQuery->where('user_id', auth()->id());
+            $returnsQuery->where($userCol, auth()->id());
         } elseif ($userId && $userId !== 'all') {
-            $returnsQuery->where('user_id', $userId);
+            $returnsQuery->where($userCol, $userId);
         }
 
         $returns = $returnsQuery->get();

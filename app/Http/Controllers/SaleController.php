@@ -244,9 +244,15 @@ class SaleController extends Controller
             ->sum('total_bill_amount');
 
         // Calculate today's returns for the logged-in user
-        $todayReturns = \App\Models\SalesReturn::where('user_id', auth()->id())
-            ->whereDate('created_at', date('Y-m-d'))
-            ->sum('total_net');
+        $todayReturnsQuery = \App\Models\SalesReturn::whereDate('created_at', date('Y-m-d'));
+        if (\Illuminate\Support\Facades\Schema::hasColumn('sales_returns', 'user_id')) {
+            $todayReturnsQuery->where('user_id', auth()->id());
+        } else {
+            $todayReturnsQuery->whereHas('sale', function ($q) {
+                $q->where('user_id', auth()->id());
+            });
+        }
+        $todayReturns = $todayReturnsQuery->sum('total_net');
 
         $todaySales = $rawTodaySales - $todayReturns;
 
@@ -1796,7 +1802,9 @@ class SaleController extends Controller
             // Save sales_returns row (CSV arrays + json color array)
             $saleReturn = new \App\Models\SalesReturn();
             $saleReturn->sale_id = $saleId;
-            $saleReturn->user_id = auth()->id();
+            if (\Illuminate\Support\Facades\Schema::hasColumn('sales_returns', 'user_id')) {
+                $saleReturn->user_id = auth()->id();
+            }
             $saleReturn->customer = $request->customer;
             $saleReturn->reference = $request->reference;
             $saleReturn->product = implode(',', $combined_products);
