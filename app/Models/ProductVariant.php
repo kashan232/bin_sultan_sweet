@@ -21,6 +21,10 @@ class ProductVariant extends Model
         'is_active'       => 'boolean',
     ];
 
+    protected $hidden = [
+        'product',
+    ];
+
     public function product()
     {
         return $this->belongsTo(Product::class);

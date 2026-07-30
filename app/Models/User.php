@@ -51,5 +51,52 @@ class User extends Authenticatable
 //         return $this->belongsToMany(Role::class, 'model_has_roles', 'model_id', 'role_id')
 //                     ->where('model_type', User::class);
 //     }
-    
+
+    /**
+     * Check if user is restricted to specific products/categories.
+     */
+    public function hasProductRestriction(): bool
+    {
+        if ($this->hasRole('super-admin')) {
+            return false;
+        }
+        try {
+            return $this->hasPermissionTo('specific product');
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Get restricted category IDs for the user.
+     */
+    public function getRestrictedCategoryIds(): array
+    {
+        if (!$this->hasProductRestriction()) {
+            return [];
+        }
+
+        $roleIds = $this->roles()->pluck('id')->toArray();
+        return \DB::table('role_categories')
+            ->whereIn('role_id', $roleIds)
+            ->pluck('category_id')
+            ->toArray();
+    }
+
+    /**
+     * Get restricted product IDs for the user.
+     */
+    public function getRestrictedProductIds(): array
+    {
+        if (!$this->hasProductRestriction()) {
+            return [];
+        }
+
+        $roleIds = $this->roles()->pluck('id')->toArray();
+        return \DB::table('role_products')
+            ->whereIn('role_id', $roleIds)
+            ->pluck('product_id')
+            ->toArray();
+    }
 }
+

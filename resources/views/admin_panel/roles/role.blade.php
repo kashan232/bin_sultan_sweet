@@ -35,6 +35,8 @@
                                              <span class="d-none" id="edit-id">{{ $role->id }}</span>
                                              <td class="d-none">
                                                  <input type="hidden" class="edit-id" value="{{ $role->id }}">
+                                                  <span class="role-restricted-products" data-products="{{ json_encode($role->restricted_products ?? []) }}"></span>
+                                                  <span class="role-restricted-categories" data-categories="{{ json_encode($role->restricted_categories ?? []) }}"></span>
                                              </td>
                                              <td class="id">{{ $role->id }}</td>
                                              <td class="name">
@@ -135,6 +137,31 @@
                      <label class="form-label fw-bold mb-2">Permissions</label>
 
                      <div id="permission-checkbox-container" class="row g-2"></div>
+
+                      <!-- Specific Product Restrictions -->
+                      <div id="specific-product-container" class="mt-4 border p-3 rounded bg-light" style="display: none;">
+                          <h6 class="fw-bold mb-3 text-dark"><i class="fas fa-lock me-2"></i>Specific Product Restrictions</h6>
+                          <div class="row">
+                              <div class="col-md-6 mb-3">
+                                  <label class="form-label fw-semibold">Select Restricted Categories</label>
+                                  <select id="select-restricted-categories" name="restricted_categories[]" class="form-control select2" multiple="multiple" style="width: 100%;">
+                                      @foreach($categories as $category)
+                                          <option value="{{ $category->id }}">{{ $category->name }}</option>
+                                      @endforeach
+                                  </select>
+                                  <small class="text-muted">User will only see products from these categories.</small>
+                              </div>
+                              <div class="col-md-6 mb-3">
+                                  <label class="form-label fw-semibold">Select Restricted Products</label>
+                                  <select id="select-restricted-products" name="restricted_products[]" class="form-control select2" multiple="multiple" style="width: 100%;">
+                                      @foreach($products as $product)
+                                          <option value="{{ $product->id }}">{{ $product->item_name }} ({{ $product->item_code }})</option>
+                                      @endforeach
+                                  </select>
+                                  <small class="text-muted">User will only see these selected products.</small>
+                              </div>
+                          </div>
+                      </div>
                  </div>
 
                  <div class="modal-footer">
@@ -255,9 +282,9 @@
 
          allPermissions.forEach(function(permission) {
 
-             let isChecked = assignedPermissions.includes(permission.name) ? 'checked' : '';
+              let isChecked = assignedPermissions.includes(permission.name) ? 'checked' : '';
 
-             $('#permission-checkbox-container').append(`
+              $('#permission-checkbox-container').append(`
         <div class="col-12 col-sm-6 col-md-4 col-lg-2">
             <div class="form-check">
                 <input class="form-check-input"
@@ -271,10 +298,53 @@
             </div>
         </div>
     `);
-         });
+          });
 
-         $("#edit-permission-modal").modal("show");
-     });
+          // Retrieve restrictions
+          let restrictedProducts = [];
+          let restrictedCategories = [];
+          try {
+              restrictedProducts = JSON.parse(tr.find(".role-restricted-products").attr("data-products") || "[]");
+              restrictedCategories = JSON.parse(tr.find(".role-restricted-categories").attr("data-categories") || "[]");
+          } catch(e) {
+              console.error(e);
+          }
+
+          // Set Select2 values
+          $('#select-restricted-categories').val(restrictedCategories).trigger('change');
+          $('#select-restricted-products').val(restrictedProducts).trigger('change');
+
+          if (assignedPermissions.includes('specific product')) {
+              $('#specific-product-container').show();
+          } else {
+              $('#specific-product-container').hide();
+          }
+
+          $("#edit-permission-modal").modal("show");
+      });
+
+      // Handle checkbox change dynamically
+      $(document).on('change', 'input[name="permissions[]"]', function() {
+          let isSpecificProductChecked = $('input[name="permissions[]"][value="specific product"]').is(':checked');
+          if (isSpecificProductChecked) {
+              $('#specific-product-container').slideDown();
+          } else {
+              $('#specific-product-container').slideUp();
+              $('#select-restricted-categories').val([]).trigger('change');
+              $('#select-restricted-products').val([]).trigger('change');
+          }
+      });
+
+      $(document).ready(function() {
+          $('#select-restricted-categories').select2({
+              dropdownParent: $('#edit-permission-modal'),
+              placeholder: "Select Categories"
+          });
+          $('#select-restricted-products').select2({
+              dropdownParent: $('#edit-permission-modal'),
+              placeholder: "Select Products"
+          });
+      });
  </script>
  @if(session('success'))
  <script>

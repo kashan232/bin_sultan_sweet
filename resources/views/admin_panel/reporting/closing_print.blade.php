@@ -99,7 +99,7 @@ table tbody tr:last-child td { border-bottom: none; }
       @forelse($rows as $r)
       @php
         $purchProd = ((float)($r->purchased ?? 0)) + ((float)($r->produced ?? 0));
-        $sold      = (float)($r->sold ?? 0);
+        $sold      = ((float)($r->sold ?? 0)) - ((float)($r->sale_return ?? 0));
         $avail     = (float)($r->balance ?? 0);
         $isKg      = !empty($r->is_kg);
         $itemName  = $r->item_name ?? '';

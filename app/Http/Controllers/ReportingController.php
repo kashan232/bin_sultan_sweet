@@ -18,7 +18,8 @@ class ReportingController extends Controller
     public function item_stock_report()
     {
         // Pass ALL products for the dropdown — no pagination needed
-        $products = \App\Models\Product::orderBy('item_name', 'asc')
+        $products = \App\Models\Product::restricted()
+            ->orderBy('item_name', 'asc')
             ->select('id', 'item_code', 'item_name')
             ->get();
         return view('admin_panel.reporting.item_stock_report', compact('products'));
@@ -43,7 +44,7 @@ class ReportingController extends Controller
         }
 
         // 1. Get products and their variants
-        $pQuery = Product::with(['variants', 'unit'])->orderBy('item_name');
+        $pQuery = Product::restricted()->with(['variants', 'unit'])->orderBy('item_name');
 
         $productIdsFilter = [];
         if (is_array($productIdsArr)) {
@@ -347,13 +348,13 @@ class ReportingController extends Controller
                     $pReturn   = (float)($mapPR[$key] ?? 0); 
                     if ($v->is_default || $p->variants->first()->id == $v->id) {
                         $pReturn += (float)($mapPR[$p->id . '_0'] ?? 0);
-                    }
-                    $sold      = (float)($soldMap[$key] ?? 0);
+                    }                    $netSold   = (float)($soldMap[$key] ?? 0);
                     $sReturn   = (float)($retMap[$key] ?? 0);
                     if ($v->is_default || $p->variants->first()->id == $v->id) {
-                        $sold    += (float)($soldMap[$p->id . '_0'] ?? 0);
+                        $netSold += (float)($soldMap[$p->id . '_0'] ?? 0);
                         $sReturn += (float)($retMap[$p->id . '_0'] ?? 0);
                     }
+                    $sold = $netSold + $sReturn;
 
                     $adjInc    = (float)($mapAdjInc[$p->id . '_0'] ?? 0);
                     $adjDec    = (float)($mapAdjDec[$p->id . '_0'] ?? 0);
@@ -368,12 +369,13 @@ class ReportingController extends Controller
                     if ($v->is_default || $p->variants->first()->id == $v->id) {
                         $pRetBef += (float)($mapPRB[$p->id . '_0'] ?? 0);
                     }
-                    $soldBef    = (float)($soldBefMap[$key] ?? 0);
+                    $netSoldBef = (float)($soldBefMap[$key] ?? 0);
                     $sRetBef    = (float)($retBefMap[$key] ?? 0);
                     if ($v->is_default || $p->variants->first()->id == $v->id) {
-                        $soldBef += (float)($soldBefMap[$p->id . '_0'] ?? 0);
-                        $sRetBef += (float)($retBefMap[$p->id . '_0'] ?? 0);
+                        $netSoldBef += (float)($soldBefMap[$p->id . '_0'] ?? 0);
+                        $sRetBef    += (float)($retBefMap[$p->id . '_0'] ?? 0);
                     }
+                    $soldBef = $netSoldBef + $sRetBef;
                     $adjIncBef  = (float)($mapAdjIncBef[$p->id . '_0'] ?? 0);
                     $adjDecBef  = (float)($mapAdjDecBef[$p->id . '_0'] ?? 0);
 
@@ -393,7 +395,7 @@ class ReportingController extends Controller
                         'sold'            => $sold,
                         'sale_return'     => $sReturn,
                         'balance'         => $closingStock,
-                        'unit'            => $p->unit->name ?? ($is_kg ? 'KG' : 'PC'),
+                        'unit'            => $p->unit?->name ?? ($is_kg ? 'KG' : 'PC'),
                     ];
                     $grandTotalValue += $closingStock * (float)($v->wholesale_price ?: $p->wholesale_price);
                 }
@@ -403,37 +405,52 @@ class ReportingController extends Controller
                 $code = $p->item_code;
 
                 $purchased_kg = (float)($mapP[$key] ?? 0);
-                $produced  = (float)($mapProd[$key] ?? 0);
+                
+                // Aggregate ALL productions for this product (base + any variant IDs)
+                $produced = 0;
+                foreach ($mapProd as $k => $val) {
+                    if (str_starts_with($k, $p->id . '_')) {
+                        $produced += (float)$val;
+                    }
+                }
+                
                 $pReturn   = (float)($mapPR[$p->id . '_0'] ?? 0);
 
-                $rawSold    = (float)($soldMap[$key] ?? 0);
+                $rawNetSold = (float)($soldMap[$key] ?? 0);
                 $rawSReturn = (float)($retMap[$key] ?? 0);
 
                 // BEFORE-PERIOD values for opening stock
-                $rawPurchBef  = (float)($mapPB[$key] ?? 0);
-                $rawProdBef   = (float)($mapProdB[$key] ?? 0);
-                $rawPRetBef   = (float)($mapPRB[$p->id . '_0'] ?? 0);
-                $rawSoldBef   = (float)($soldBefMap[$key] ?? 0);
-                $rawSRetBef   = (float)($retBefMap[$key] ?? 0);
+                $rawPurchBef   = (float)($mapPB[$key] ?? 0);
+                
+                $rawProdBef = 0;
+                foreach ($mapProdB as $k => $val) {
+                    if (str_starts_with($k, $p->id . '_')) {
+                        $rawProdBef += (float)$val;
+                    }
+                }
+                
+                $rawPRetBef    = (float)($mapPRB[$p->id . '_0'] ?? 0);
+                $rawNetSoldBef = (float)($soldBefMap[$key] ?? 0);
+                $rawSRetBef    = (float)($retBefMap[$key] ?? 0);
 
                 if ($is_kg) {
                     $purchased = $purchased_kg * 1000;
-                    $sold      = $rawSold * 1000;
                     $sReturn   = $rawSReturn * 1000;
+                    $sold      = ($rawNetSold * 1000) + $sReturn;
                     $pReturn   = $pReturn * 1000;
 
                     $purchBef  = $rawPurchBef * 1000;
-                    $soldBef   = $rawSoldBef * 1000;
                     $sRetBef   = $rawSRetBef * 1000;
+                    $soldBef   = ($rawNetSoldBef * 1000) + $sRetBef;
                     $pRetBef   = $rawPRetBef * 1000;
                 } else {
                     $purchased = $purchased_kg;
-                    $sold      = $rawSold;
                     $sReturn   = $rawSReturn;
-
+                    $sold      = $rawNetSold + $sReturn;
+                    
                     $purchBef  = $rawPurchBef;
-                    $soldBef   = $rawSoldBef;
                     $sRetBef   = $rawSRetBef;
+                    $soldBef   = $rawNetSoldBef + $sRetBef;
                     $pRetBef   = $rawPRetBef;
                 }
 
@@ -450,20 +467,22 @@ class ReportingController extends Controller
                         $vPurchRaw    = (float)($mapP[$vKey] ?? 0);
                         $vPurchBefRaw = (float)($mapPB[$vKey] ?? 0);
 
-                        $purchased += $vPurchRaw * 1000;
-                        $purchBef  += $vPurchBefRaw * 1000;
+                        $purchased += $vPurchRaw * $mul;
+                        $purchBef  += $vPurchBefRaw * $mul;
 
-                        $produced  += (float)($mapProd[$vKey] ?? 0);
-                        $rawProdBef+= (float)($mapProdB[$vKey] ?? 0);
+                        $pReturn   += (float)($mapPR[$vKey] ?? 0) * $mul;
+                        $pRetBef   += (float)($mapPRB[$vKey] ?? 0) * $mul;
 
-                        $pReturn   += (float)($mapPR[$vKey] ?? 0) * 1000;
-                        $pRetBef   += (float)($mapPRB[$vKey] ?? 0) * 1000;
+                        $vSReturn    = (float)($retMap[$vKey] ?? 0) * $mul;
+                        $vSRetBef    = (float)($retBefMap[$vKey] ?? 0) * $mul;
+                        $vNetSold    = (float)($soldMap[$vKey] ?? 0) * $mul;
+                        $vNetSoldBef = (float)($soldBefMap[$vKey] ?? 0) * $mul;
 
-                        $sold      += (float)($soldMap[$vKey] ?? 0) * $mul;
-                        $soldBef   += (float)($soldBefMap[$vKey] ?? 0) * $mul;
+                        $sold    += ($vNetSold + $vSReturn);
+                        $soldBef += ($vNetSoldBef + $vSRetBef);
 
-                        $sReturn   += (float)($retMap[$vKey] ?? 0) * $mul;
-                        $sRetBef   += (float)($retBefMap[$vKey] ?? 0) * $mul;
+                        $sReturn += $vSReturn;
+                        $sRetBef += $vSRetBef;
                     }
                     $prodBef = $rawProdBef;
                 } else {
@@ -492,7 +511,7 @@ class ReportingController extends Controller
                     'sold'            => $sold,
                     'sale_return'     => $sReturn,
                     'balance'         => $closingStock,
-                    'unit'            => $p->unit->name ?? ($is_kg ? 'KG' : 'PC'),
+                    'unit'            => $p->unit?->name ?? ($is_kg ? 'KG' : 'PC'),
                 ];
                 
                 $valuationQty = $is_kg ? ($closingStock / 1000) : $closingStock;
@@ -537,6 +556,28 @@ class ReportingController extends Controller
             ->where('product_variants.is_active', true)
             ->orderBy('products.item_name')
             ->orderBy('product_variants.size_value');
+
+        $user = auth()->user();
+        if ($user && $user->hasProductRestriction()) {
+            $categoryIds = $user->getRestrictedCategoryIds();
+            $productIds = $user->getRestrictedProductIds();
+            $query->where(function($q) use ($categoryIds, $productIds) {
+                if (empty($categoryIds) && empty($productIds)) {
+                    $q->whereRaw('1 = 0');
+                    return;
+                }
+                if (!empty($categoryIds)) {
+                    $q->whereIn('products.category_id', $categoryIds);
+                }
+                if (!empty($productIds)) {
+                    if (!empty($categoryIds)) {
+                        $q->orWhereIn('products.id', $productIds);
+                    } else {
+                        $q->whereIn('products.id', $productIds);
+                    }
+                }
+            });
+        }
 
         if ($productId && $productId !== 'all') {
             $query->where('products.id', $productId);

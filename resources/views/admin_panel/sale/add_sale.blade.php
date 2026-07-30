@@ -131,6 +131,10 @@
 <input type="hidden" name="running_sale_id" id="hRunningSaleId" value="">
 
 @if(session('success'))
+    <script>
+        sessionStorage.removeItem('pos_last_q');
+        sessionStorage.removeItem('pos_last_cat');
+    </script>
     <div class="alert alert-success alert-dismissible fade show" role="alert" style="margin: 10px;">
         {{ session('success') }}
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -593,6 +597,7 @@ function loadProds(reset=false) {
 function makeCard(p) {
     const div = document.createElement('div');
     div.className = 'pc';
+    div.setAttribute('data-product-id', p.id);
 
     const isKg   = p.unit_type === 'kg';
     const lowTh  = isKg ? 5000 : 5;
@@ -670,6 +675,7 @@ document.querySelectorAll('.cat-tab').forEach(function(t) {
 
 /* ---- Prepend recent products to grid (after regular products load) ---- */
 function prependRecentToGrid(grid) {
+    if (curQ !== '' || curCat !== '') return; // Don't prepend during search or category filtering
     if (grid.dataset.recentLoaded) return;
     try {
         const recent = JSON.parse(localStorage.getItem('pos_recent') || '[]');
@@ -678,12 +684,20 @@ function prependRecentToGrid(grid) {
         fetch("{{ route('pos.recent.products') }}?ids[]=" + ids.join('&ids[]='), {
             headers: {'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}
         }).then(function(res) { return res.json(); }).then(function(json) {
+            if (curQ !== '' || curCat !== '') return; // Check again in case user started searching during fetch
             if (json.data && json.data.length) {
                 // Prepend cards in reverse order so first is at top
                 for (let i = json.data.length - 1; i >= 0; i--) {
-                    const card = makeCard(json.data[i]);
-                    card.classList.add('recent-card');
-                    grid.prepend(card);
+                    const item = json.data[i];
+                    const existing = grid.querySelector(`.pc[data-product-id="${item.id}"]`);
+                    if (existing) {
+                        existing.classList.add('recent-card');
+                        grid.prepend(existing);
+                    } else {
+                        const card = makeCard(item);
+                        card.classList.add('recent-card');
+                        grid.prepend(card);
+                    }
                 }
                 grid.dataset.recentLoaded = '1';
             }
@@ -1367,6 +1381,17 @@ document.addEventListener('keydown', function(e) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         doSale();
+    }
+});
+
+// Auto focus on search bar input
+document.addEventListener("DOMContentLoaded", function() {
+    const searchInput = document.getElementById('posSearch');
+    if (searchInput) {
+        searchInput.focus();
+        const val = searchInput.value;
+        searchInput.value = '';
+        searchInput.value = val;
     }
 });
 

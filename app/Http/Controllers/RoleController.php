@@ -14,8 +14,20 @@ class RoleController extends Controller
      public function index()
     {
         $roles = Role::all();
+        foreach ($roles as $role) {
+            $role->restricted_products = \DB::table('role_products')
+                ->where('role_id', $role->id)
+                ->pluck('product_id')
+                ->toArray();
+            $role->restricted_categories = \DB::table('role_categories')
+                ->where('role_id', $role->id)
+                ->pluck('category_id')
+                ->toArray();
+        }
         $allPermissions  = Permission::all();
-        return view('admin_panel.roles.role', compact(['roles', 'allPermissions'])); 
+        $products = \App\Models\Product::orderBy('item_name')->get();
+        $categories = \App\Models\Category::orderBy('name')->get();
+        return view('admin_panel.roles.role', compact(['roles', 'allPermissions', 'products', 'categories'])); 
     }
 
     public function store(Request $request)
@@ -97,7 +109,46 @@ class RoleController extends Controller
         $role = Role::findOrFail($request->edit_id);
 
         // Assign new roles (by name)
-        $role->syncPermissions($request->permissions ?? []);
+        $permissions = $request->permissions ?? [];
+        $role->syncPermissions($permissions);
+
+        // Sync restrictions if 'specific product' is in permissions, otherwise clear them
+        if (in_array('specific product', $permissions)) {
+            // Sync categories
+            $categoryIds = $request->restricted_categories ?? [];
+            \DB::table('role_categories')->where('role_id', $role->id)->delete();
+            $categoryData = [];
+            foreach ($categoryIds as $catId) {
+                $categoryData[] = [
+                    'role_id' => $role->id,
+                    'category_id' => $catId,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ];
+            }
+            if (!empty($categoryData)) {
+                \DB::table('role_categories')->insert($categoryData);
+            }
+
+            // Sync products
+            $productIds = $request->restricted_products ?? [];
+            \DB::table('role_products')->where('role_id', $role->id)->delete();
+            $productData = [];
+            foreach ($productIds as $prodId) {
+                $productData[] = [
+                    'role_id' => $role->id,
+                    'product_id' => $prodId,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ];
+            }
+            if (!empty($productData)) {
+                \DB::table('role_products')->insert($productData);
+            }
+        } else {
+            \DB::table('role_categories')->where('role_id', $role->id)->delete();
+            \DB::table('role_products')->where('role_id', $role->id)->delete();
+        }
 
         return back()->with('success', 'Role permissions updated successfully!');
     }

@@ -269,7 +269,7 @@ class SaleController extends Controller
     public function addsale()
     {
         $Customer = Customer::get();
-        $categories = \App\Models\Category::orderBy('name')->get();
+        $categories = \App\Models\Category::restricted()->orderBy('name')->get();
         $tables = \App\Models\Table::orderBy('table_name')->get();
         return view('admin_panel.sale.add_sale', compact('Customer', 'categories', 'tables'));
     }
@@ -280,7 +280,7 @@ class SaleController extends Controller
         $catId   = $request->get('category_id', '');
         $perPage = (int) $request->get('per_page', 60);
 
-        $query = Product::with(['brand', 'stock', 'variants', 'activeDiscount', 'category_relation'])
+        $query = Product::restricted()->with(['brand', 'stock', 'variants', 'activeDiscount', 'category_relation'])
             ->withSum(['stocks as total_stock' => function($q) {
                 $q->where('branch_id', 1)->where('warehouse_id', 1);
             }], 'qty');
@@ -355,7 +355,7 @@ class SaleController extends Controller
             return response()->json(['data' => []]);
         }
 
-        $products = Product::with(['brand', 'stock', 'variants', 'activeDiscount', 'category_relation'])
+        $products = Product::restricted()->with(['brand', 'stock', 'variants', 'activeDiscount', 'category_relation'])
             ->withSum(['stocks as total_stock' => function($q) {
                 $q->where('branch_id', 1)->where('warehouse_id', 1);
             }], 'qty')
@@ -445,7 +445,7 @@ class SaleController extends Controller
         $q = trim($request->q ?? '');
 
         // 1. Search products
-        $pQuery = Product::with(['brand', 'activeDiscount', 'variants'])
+        $pQuery = Product::restricted()->with(['brand', 'activeDiscount', 'variants'])
             ->orderBy('item_name');
 
         if ($q !== '') {
@@ -461,6 +461,9 @@ class SaleController extends Controller
         // 2. Search variants directly for codes
         $variantSearchResults = $q !== ''
             ? \App\Models\ProductVariant::with('product.brand')
+                ->whereHas('product', function($query) {
+                    $query->restricted();
+                })
                 ->where('variant_name', 'like', "%{$q}%")
                 ->limit(20)
                 ->get()
@@ -1927,12 +1930,24 @@ class SaleController extends Controller
     }
 
 
-    public function salereturnview()
+    public function salereturnview(Request $request)
     {
         // Fetch all sale returns with the original sale and customer info
-        $salesReturns = SalesReturn::with('sale.customer_relation')->orderBy('created_at', 'desc')->get();
+        $query = SalesReturn::with('sale.customer_relation')->orderBy('created_at', 'desc');
+
+        if ($request->filled('from_date')) {
+            $query->whereDate('created_at', '>=', $request->from_date);
+        }
+        if ($request->filled('to_date')) {
+            $query->whereDate('created_at', '<=', $request->to_date);
+        }
+
+        $salesReturns = $query->get();
+
         return view('admin_panel.sale.return.index', [
             'salesReturns' => $salesReturns,
+            'from_date' => $request->from_date,
+            'to_date' => $request->to_date,
         ]);
     }
 

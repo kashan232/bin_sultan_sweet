@@ -10,18 +10,30 @@ use Illuminate\Support\Facades\Auth;
 
 class ProductionController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $entries = DB::table('production_entries as pe')
-            ->leftJoin('users as u', 'u.id', '=', 'pe.created_by')
-            ->select('pe.*', 'u.name as user_name', 
-                DB::raw('(SELECT COUNT(*) FROM production_entry_items WHERE production_entry_id = pe.id) as items_count'),
-                DB::raw("(SELECT GROUP_CONCAT(CONCAT(p.item_name, IF(pv.size_label IS NULL AND pv.variant_name IS NULL, '', CONCAT(' ', COALESCE(pv.size_label, pv.variant_name))), ' (', pei.qty_entered, ' ', pei.unit, ')') SEPARATOR ', ') FROM production_entry_items pei JOIN products p ON p.id = pei.product_id LEFT JOIN product_variants pv ON pv.id = pei.variant_id WHERE pei.production_entry_id = pe.id) as product_details")
-            )
-            ->orderBy('pe.created_at', 'desc')
-            ->get();
+        $dateFrom = $request->date_from;
+        $dateTo   = $request->date_to;
 
-        return view('admin_panel.production.index', compact('entries'));
+        $query = DB::table('production_entries as pe')
+            ->leftJoin('users as u', 'u.id', '=', 'pe.created_by')
+            ->select('pe.*', 'u.name as user_name',
+                DB::raw('(SELECT COUNT(*) FROM production_entry_items WHERE production_entry_id = pe.id AND qty_entered > 0) as items_count'),
+                DB::raw("(SELECT GROUP_CONCAT(CONCAT(p.item_name, IF(pv.size_label IS NULL AND pv.variant_name IS NULL, '', CONCAT(' ', COALESCE(pv.size_label, pv.variant_name))), ' (', TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM pei.qty_entered)), ' ', IF(p.unit_type = 'kg', 'KG', IF(p.unit_type = 'pound', 'Pound', 'Pc')), ')') SEPARATOR ', ') FROM production_entry_items pei JOIN products p ON p.id = pei.product_id LEFT JOIN product_variants pv ON pv.id = pei.variant_id WHERE pei.production_entry_id = pe.id AND pei.qty_entered > 0) as product_details"),
+                DB::raw("(SELECT COALESCE(SUM(pei2.qty_entered * COALESCE(pv2.price, p2.price, (SELECT price FROM product_variants WHERE product_id = p2.id AND is_default = 1 LIMIT 1), (SELECT price FROM product_variants WHERE product_id = p2.id LIMIT 1), 0)), 0) FROM production_entry_items pei2 JOIN products p2 ON p2.id = pei2.product_id LEFT JOIN product_variants pv2 ON pv2.id = pei2.variant_id WHERE pei2.production_entry_id = pe.id AND pei2.qty_entered > 0) as retail_value")
+            )
+            ->orderBy('pe.production_date', 'desc');
+
+        if ($dateFrom) {
+            $query->whereDate('pe.production_date', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('pe.production_date', '<=', $dateTo);
+        }
+
+        $entries = $query->get();
+
+        return view('admin_panel.production.index', compact('entries', 'dateFrom', 'dateTo'));
     }
 
     public function create()
@@ -62,7 +74,7 @@ class ProductionController extends Controller
                 $product = Product::with('unit')->find($productId);
                 if (!$product) continue;
 
-                $unitName = strtolower($product->unit->name ?? '');
+                $unitName = strtolower($product->unit?->name ?? '');
                 $prodName = strtolower($product->item_name);
                 
                 // Determine if it's a gram item (1 KG input -> 1000 Stock units)
@@ -95,7 +107,7 @@ class ProductionController extends Controller
                     'production_entry_id' => $entryId,
                     'product_id' => $productId,
                     'variant_id' => $variantId,
-                    'unit' => $product->unit->name ?? 'Pc',
+                    'unit' => $product->unit_type === 'kg' ? 'KG' : ($product->unit_type === 'pound' ? 'Pound' : ($product->unit?->name ?? 'Pc')),
                     'qty_entered' => $qtyTyped,
                     'qty_stock' => $qtyStock,
                     'notes' => $request->item_note[$index] ?? null,
@@ -211,7 +223,7 @@ class ProductionController extends Controller
                 $product = Product::with('unit')->find($productId);
                 if (!$product) continue;
 
-                $unitName = strtolower($product->unit->name ?? '');
+                $unitName = strtolower($product->unit?->name ?? '');
                 $prodName = strtolower($product->item_name);
 
                 $isGram = str_contains($unitName, 'gram') || str_contains($unitName, 'gm') ||
@@ -242,7 +254,7 @@ class ProductionController extends Controller
                     'production_entry_id' => $id,
                     'product_id' => $productId,
                     'variant_id' => $variantId,
-                    'unit' => $product->unit->name ?? 'Pc',
+                    'unit' => $product->unit_type === 'kg' ? 'KG' : ($product->unit_type === 'pound' ? 'Pound' : ($product->unit?->name ?? 'Pc')),
                     'qty_entered' => $qtyTyped,
                     'qty_stock' => $qtyStock,
                     'notes' => $request->item_note[$index] ?? null,

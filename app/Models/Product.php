@@ -78,4 +78,35 @@ class Product extends Model
     {
         return $this->hasMany(Stock::class);
     }
+
+    public function scopeRestricted($query, $user = null)
+    {
+        $user = $user ?: auth()->user();
+        if (!$user || !$user->hasProductRestriction()) {
+            return $query;
+        }
+
+        $categoryIds = $user->getRestrictedCategoryIds();
+        $productIds = $user->getRestrictedProductIds();
+
+        return $query->where(function ($q) use ($categoryIds, $productIds) {
+            if (empty($categoryIds) && empty($productIds)) {
+                $q->whereRaw('1 = 0');
+                return;
+            }
+
+            if (!empty($categoryIds)) {
+                $q->whereIn('category_id', $categoryIds);
+            }
+
+            if (!empty($productIds)) {
+                if (!empty($categoryIds)) {
+                    $q->orWhereIn('id', $productIds);
+                } else {
+                    $q->whereIn('id', $productIds);
+                }
+            }
+        });
+    }
 }
+

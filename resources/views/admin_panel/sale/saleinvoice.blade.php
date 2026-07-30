@@ -500,6 +500,10 @@
 
   <script>
     document.addEventListener("DOMContentLoaded", function() {
+      // Clear search query and category cache since the sale is finalized
+      sessionStorage.removeItem('pos_last_q');
+      sessionStorage.removeItem('pos_last_cat');
+
       const query = new URLSearchParams(window.location.search);
       const returnTo = query.get('return_to') || "{{ route('sale.index') }}";
       const autoprint = query.get('autoprint') === '1';

@@ -228,12 +228,39 @@ class HomeController extends Controller
             }
         }
 
+        // ── Inventory Valuation ────────────────────────────────────────────────
+        // Products with variants: sum(stock.qty * variant.cost_price / variant.price)
+        $variantInventoryPurchase = DB::table('stocks')
+            ->join('product_variants', 'stocks.variant_id', '=', 'product_variants.id')
+            ->whereNotNull('stocks.variant_id')
+            ->sum(DB::raw('stocks.qty * product_variants.cost_price'));
+
+        $variantInventoryRetail = DB::table('stocks')
+            ->join('product_variants', 'stocks.variant_id', '=', 'product_variants.id')
+            ->whereNotNull('stocks.variant_id')
+            ->sum(DB::raw('stocks.qty * product_variants.price'));
+
+        // Products without variants: stock.qty * price (KG: qty in grams, price per kg → /1000)
+        $simpleInventoryPurchase = DB::table('stocks')
+            ->join('products', 'stocks.product_id', '=', 'products.id')
+            ->whereNull('stocks.variant_id')
+            ->sum(DB::raw('CASE WHEN products.unit_type = "kg" THEN (stocks.qty / 1000.0) * COALESCE(products.wholesale_price, 0) ELSE stocks.qty * COALESCE(products.wholesale_price, 0) END'));
+
+        $simpleInventoryRetail = DB::table('stocks')
+            ->join('products', 'stocks.product_id', '=', 'products.id')
+            ->whereNull('stocks.variant_id')
+            ->sum(DB::raw('CASE WHEN products.unit_type = "kg" THEN (stocks.qty / 1000.0) * COALESCE(products.price, 0) ELSE stocks.qty * COALESCE(products.price, 0) END'));
+
+        $inventoryPurchaseValue = (float)$variantInventoryPurchase + (float)$simpleInventoryPurchase;
+        $inventoryRetailValue   = (float)$variantInventoryRetail   + (float)$simpleInventoryRetail;
+
         return compact(
             'categoryCount', 'subcategoryCount', 'productCount', 'customerscount',
             'totalPurchases', 'totalPurchaseReturns', 'totalSales', 'totalSalesReturns',
             'salesChartStats', 'purchaseChartStats',
             'categoryProductChart', 'lowStockChart', 'categorySubChart', 'expenseChartData',
-            'labels', 'salesData', 'purchaseData'
+            'labels', 'salesData', 'purchaseData',
+            'inventoryPurchaseValue', 'inventoryRetailValue'
         );
     }
 

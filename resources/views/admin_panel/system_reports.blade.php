@@ -405,6 +405,46 @@
         </div>
     </div>
 
+    {{-- INVENTORY VALUATION CARDS --}}
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="glass-card stat-card border-accent-7" style="padding:28px 30px;">
+                <div>
+                    <div class="stat-label" style="font-size:13px;letter-spacing:0.7px;">
+                        <i class="fas fa-tag me-1" style="color:#8b5cf6;"></i> Inventory Purchase Value
+                    </div>
+                    <div class="stat-value" style="font-size:30px;margin-top:6px;">
+                        Rs {{ number_format($inventoryPurchaseValue, 0) }}
+                    </div>
+                    <div class="stat-sub" style="margin-top:4px;">
+                        Total stock valued at <strong>purchase / cost price</strong>
+                    </div>
+                </div>
+                <div class="stat-icon" style="width:64px;height:64px;border-radius:20px;font-size:26px;background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#7c3aed;">
+                    <i class="fas fa-box"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="glass-card stat-card border-accent-8" style="padding:28px 30px;">
+                <div>
+                    <div class="stat-label" style="font-size:13px;letter-spacing:0.7px;">
+                        <i class="fas fa-store me-1" style="color:#ec4899;"></i> Inventory Retail Value
+                    </div>
+                    <div class="stat-value" style="font-size:30px;margin-top:6px;">
+                        Rs {{ number_format($inventoryRetailValue, 0) }}
+                    </div>
+                    <div class="stat-sub" style="margin-top:4px;">
+                        Total stock valued at <strong>retail / sale price</strong>
+                    </div>
+                </div>
+                <div class="stat-icon" style="width:64px;height:64px;border-radius:20px;font-size:26px;background:linear-gradient(135deg,#fce7f3,#fbcfe8);color:#be185d;">
+                    <i class="fas fa-tags"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- CHARTS ROW --}}
     <div class="row g-3 mb-4">
         <div class="col-lg-6">
