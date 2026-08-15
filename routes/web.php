@@ -48,6 +48,7 @@ use App\Http\Controllers\RawMaterialController;
 // kashan connection_aborted
 
 // Qunt connected 
+// kashan
 Route::get('/home', [HomeController::class, 'index'])->middleware('auth')->name('home');
 
 Route::get('System/Reports', [HomeController::class, 'System_Reports'])->name('System.Reports')->middleware('permission:System Reports');
