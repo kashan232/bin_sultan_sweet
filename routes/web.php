@@ -218,20 +218,20 @@ Route::middleware('auth')->group(function () {
     Route::get('/production/{id}/gatepass', [ProductionController::class, 'gatepass'])->name('production.gatepass');
 
     // Raw Material Routes
-    Route::get('/raw-materials', [RawMaterialController::class, 'index'])->name('raw_materials.index');
-    Route::get('/raw-materials/stock-report/print', [RawMaterialController::class, 'printStockReport'])->name('raw_materials.stock_report.print');
-    Route::get('/raw-materials/vendor-ledger/print', [RawMaterialController::class, 'printVendorLedger'])->name('raw_materials.vendor_ledger.print');
-    Route::post('/raw-materials/material/store', [RawMaterialController::class, 'storeMaterial'])->name('raw_materials.material.store');
-    Route::get('/raw-materials/material/delete/{id}', [RawMaterialController::class, 'deleteMaterial'])->name('raw_materials.material.delete');
-    Route::post('/raw-materials/vendor/store', [RawMaterialController::class, 'storeVendor'])->name('raw_materials.vendor.store');
-    Route::get('/raw-materials/vendor/delete/{id}', [RawMaterialController::class, 'deleteVendor'])->name('raw_materials.vendor.delete');
-    Route::post('/raw-materials/purchase/store', [RawMaterialController::class, 'storePurchase'])->name('raw_materials.purchase.store');
-    Route::get('/raw-materials/purchase/delete/{id}', [RawMaterialController::class, 'deletePurchase'])->name('raw_materials.purchase.delete');
-    Route::post('/raw-materials/vendor-payment/store', [RawMaterialController::class, 'storeVendorPayment'])->name('raw_materials.vendor_payment.store');
-    Route::get('/raw-materials/purchase/{id}/invoice', [RawMaterialController::class, 'purchaseInvoice'])->name('raw_materials.purchase.invoice');
-    Route::post('/raw-materials/out/store', [RawMaterialController::class, 'storeOut'])->name('raw_materials.out.store');
-    Route::get('/raw-materials/out/delete/{id}', [RawMaterialController::class, 'deleteOut'])->name('raw_materials.out.delete');
-    Route::get('/raw-materials/out/{id}/dc', [RawMaterialController::class, 'outChallan'])->name('raw_materials.out.dc');
+    Route::get('/raw-materials', [RawMaterialController::class, 'index'])->name('raw_materials.index')->middleware('permission:Raw Materials');
+    Route::get('/raw-materials/stock-report/print', [RawMaterialController::class, 'printStockReport'])->name('raw_materials.stock_report.print')->middleware('permission:Raw Material Stock Report|Raw Materials');
+    Route::get('/raw-materials/vendor-ledger/print', [RawMaterialController::class, 'printVendorLedger'])->name('raw_materials.vendor_ledger.print')->middleware('permission:Raw Materials|Vendor Ledger');
+    Route::post('/raw-materials/material/store', [RawMaterialController::class, 'storeMaterial'])->name('raw_materials.material.store')->middleware('permission:Raw Materials');
+    Route::get('/raw-materials/material/delete/{id}', [RawMaterialController::class, 'deleteMaterial'])->name('raw_materials.material.delete')->middleware('permission:Raw Materials');
+    Route::post('/raw-materials/vendor/store', [RawMaterialController::class, 'storeVendor'])->name('raw_materials.vendor.store')->middleware('permission:Raw Materials');
+    Route::get('/raw-materials/vendor/delete/{id}', [RawMaterialController::class, 'deleteVendor'])->name('raw_materials.vendor.delete')->middleware('permission:Raw Materials');
+    Route::post('/raw-materials/purchase/store', [RawMaterialController::class, 'storePurchase'])->name('raw_materials.purchase.store')->middleware('permission:Raw Material Purchase|Raw Materials');
+    Route::get('/raw-materials/purchase/delete/{id}', [RawMaterialController::class, 'deletePurchase'])->name('raw_materials.purchase.delete')->middleware('permission:Raw Material Purchase|Raw Materials');
+    Route::post('/raw-materials/vendor-payment/store', [RawMaterialController::class, 'storeVendorPayment'])->name('raw_materials.vendor_payment.store')->middleware('permission:Raw Materials');
+    Route::get('/raw-materials/purchase/{id}/invoice', [RawMaterialController::class, 'purchaseInvoice'])->name('raw_materials.purchase.invoice')->middleware('permission:Raw Materials');
+    Route::post('/raw-materials/out/store', [RawMaterialController::class, 'storeOut'])->name('raw_materials.out.store')->middleware('permission:Raw Material Out|Raw Materials');
+    Route::get('/raw-materials/out/delete/{id}', [RawMaterialController::class, 'deleteOut'])->name('raw_materials.out.delete')->middleware('permission:Raw Material Out|Raw Materials');
+    Route::get('/raw-materials/out/{id}/dc', [RawMaterialController::class, 'outChallan'])->name('raw_materials.out.dc')->middleware('permission:Raw Materials');
 
     Route::get('/search-products', [ProductController::class, 'searchProducts'])->name('search-products');
     Route::get('/purchase/{id}/invoice', [PurchaseController::class, 'Invoice'])->name('purchase.invoice');

@@ -81,14 +81,18 @@
                                 </div>
                                 @endcanany
 
-                                @canany(['Purchase','Purchase Return','Vendor'])
+                                @canany(['Purchase','Purchase Return','Vendor','Raw Materials'])
                                 <!-- Purchase & Inventory -->
                                 <div class="col-group col-md-3">
                                     <p class="category-heading">Purchase & Inventory</p>
                                     <ul class="submenu-item">
                                         @can('Purchase')
                                         <li><a href="{{ route('Purchase.home') }}"><i class="fas fa-shopping-cart"></i> Purchase</a></li>
+                                        @endcan
+                                        @canany(['Raw Materials', 'Purchase'])
                                         <li><a href="{{ route('raw_materials.index') }}"><i class="fa fa-cubes"></i> Raw Materials</a></li>
+                                        @endcanany
+                                        @can('Purchase')
                                         <li><a href="{{ route('production.index') }}"><i class="fas fa-industry"></i> Own Production</a></li>
                                         <li><a href="{{ route('stock-adjustment.index') }}"><i class="fas fa-sliders-h"></i> Stock Adjustment</a></li>
                                         @endcan
