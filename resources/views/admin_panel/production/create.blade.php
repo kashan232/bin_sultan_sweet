@@ -344,7 +344,7 @@ select.pc-fld {
   .pc-hdr { padding: 1.1rem 1.25rem; }
   .pc-hdr h2 { font-size: 1.1rem; }
   .pc-card-body { padding: 1rem; }
-  .pc-tbl tbody td { padding: .45rem .6rem; }
+  .pc-tbl tbody td { padding: .4rem .6rem; }
 }
 </style>
 
@@ -395,12 +395,14 @@ select.pc-fld {
             <table class="pc-tbl">
               <thead>
                 <tr>
-                  <th style="width:28%;">Product</th>
-                  <th style="width:12%;">Code</th>
+                  <th style="width:26%;">Product</th>
+                  <th style="width:10%;">Code</th>
                   <th style="width:8%;">Unit</th>
-                  <th style="width:16%;">Entered Qty (KG/Pc)</th>
-                  <th style="width:18%;">Note</th>
-                  <th style="width:70px;">Action</th>
+                  <th style="width:12%;">Price (Rs)</th>
+                  <th style="width:14%;">Entered Qty (KG/Pc)</th>
+                  <th style="width:14%;">Total (Rs)</th>
+                  <th style="width:11%;">Note</th>
+                  <th style="width:50px;">Action</th>
                 </tr>
               </thead>
               <tbody id="productionItems">
@@ -409,8 +411,12 @@ select.pc-fld {
                     <select name="product_id[]" class="pc-tbl-fld select2 product-select" required style="width:100%;">
                       <option value="">Search Product...</option>
                       @foreach($products as $p)
+                      @php
+                          $pPrice = $p->price ?? ($p->defaultVariant?->price ?? 0);
+                      @endphp
                       <option value="{{ $p->id }}"
                         data-code="{{ $p->item_code }}"
+                        data-price="{{ number_format($pPrice, 2, '.', '') }}"
                         data-unit="{{ $p->unit_type === 'kg' ? 'KG' : ($p->unit->name ?? 'Pc') }}"
                         data-is-gram="{{ $p->unit_type === 'kg' || str_contains(strtolower($p->item_name), 'gram') || str_contains(strtolower($p->unit->name ?? ''), 'gram') ? '1' : '0' }}">
                         {{ $p->item_code }} - {{ $p->item_name }}
@@ -425,10 +431,12 @@ select.pc-fld {
                   </td>
                   <td><input type="text" class="pc-tbl-fld code-display" readonly></td>
                   <td><input type="text" class="pc-tbl-fld unit-display" readonly></td>
+                  <td><input type="text" class="pc-tbl-fld price-display" readonly placeholder="0.00" style="background:#f8fafc; font-weight:700; color:#0f172a;"></td>
                   <td>
                     <input type="number" step="0.001" name="qty[]" class="pc-tbl-fld qty-input" required min="0.001">
                     <small class="pc-conv conversion-display"></small>
                   </td>
+                  <td><input type="text" class="pc-tbl-fld total-display" readonly placeholder="0.00" style="background:#f8fafc; font-weight:700; color:#2563eb;"></td>
                   <td><input type="text" name="item_note[]" class="pc-tbl-fld"></td>
                   <td>
                     <button type="button" class="pc-act-remove remove-row" title="Remove row">
@@ -437,6 +445,14 @@ select.pc-fld {
                   </td>
                 </tr>
               </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="5" style="text-align:right; font-weight:800; font-size:.85rem; padding:.75rem;">BATCH RETAIL VALUE TOTAL:</td>
+                  <td colspan="3" style="padding:.75rem;">
+                    <span id="grandTotalDisplay" style="font-size:1.05rem; font-weight:900; color:#2563eb;">Rs 0.00</span>
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
 
@@ -468,9 +484,13 @@ $(document).ready(function() {
   $(document).on('change', '.product-select', function() {
     let opt = $(this).find(':selected');
     let row = $(this).closest('tr');
-    row.find('.code-display').val(opt.data('code'));
-    row.find('.unit-display').val(opt.data('unit'));
-    updateConversion(row);
+    let price = parseFloat(opt.data('price')) || 0;
+    
+    row.find('.code-display').val(opt.data('code') || '');
+    row.find('.unit-display').val(opt.data('unit') || '');
+    row.find('.price-display').val(price.toFixed(2));
+    
+    updateRowTotal(row);
 
     let productId = $(this).val();
     let variantSelect = row.find('.variant-select');
@@ -487,7 +507,7 @@ $(document).ready(function() {
           variantSelect.html('<option value="">Select Size (Optional)</option>');
           if (res.variants && res.variants.length > 0) {
             res.variants.forEach(function(v) {
-              variantSelect.append('<option value="' + v.id + '">' + v.size_label + '</option>');
+              variantSelect.append('<option value="' + v.id + '" data-price="' + (v.price || price) + '">' + v.size_label + '</option>');
             });
           } else {
             variantContainer.hide();
@@ -504,9 +524,40 @@ $(document).ready(function() {
     }
   });
 
-  $(document).on('input', '.qty-input', function() {
-    updateConversion($(this).closest('tr'));
+  $(document).on('change', '.variant-select', function() {
+    let row = $(this).closest('tr');
+    let vOpt = $(this).find(':selected');
+    let vPrice = parseFloat(vOpt.data('price'));
+    if (!isNaN(vPrice) && vPrice > 0) {
+      row.find('.price-display').val(vPrice.toFixed(2));
+    } else {
+      let pPrice = parseFloat(row.find('.product-select option:selected').data('price')) || 0;
+      row.find('.price-display').val(pPrice.toFixed(2));
+    }
+    updateRowTotal(row);
   });
+
+  $(document).on('input', '.qty-input', function() {
+    let row = $(this).closest('tr');
+    updateConversion(row);
+    updateRowTotal(row);
+  });
+
+  function updateRowTotal(row) {
+    let qty = parseFloat(row.find('.qty-input').val()) || 0;
+    let price = parseFloat(row.find('.price-display').val()) || 0;
+    let total = qty * price;
+    row.find('.total-display').val(total.toFixed(2));
+    calculateGrandTotal();
+  }
+
+  function calculateGrandTotal() {
+    let grandTotal = 0;
+    $('.total-display').each(function() {
+      grandTotal += parseFloat($(this).val()) || 0;
+    });
+    $('#grandTotalDisplay').text('Rs ' + grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+  }
 
   function updateConversion(row) {
     let qty = parseFloat(row.find('.qty-input').val()) || 0;
@@ -531,7 +582,10 @@ $(document).ready(function() {
   });
 
   $(document).on('click', '.remove-row', function() {
-    if ($('#productionItems tr').length > 1) $(this).closest('tr').remove();
+    if ($('#productionItems tr').length > 1) {
+      $(this).closest('tr').remove();
+      calculateGrandTotal();
+    }
   });
 });
 </script>

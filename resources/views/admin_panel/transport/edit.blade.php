@@ -17,7 +17,7 @@
                         </div>
 
                         <div class="col-md-3">
-                            <label class="form-label">نام</label>
+                            <label class="form-label">Secondary Name</label>
                             <input type="text" class="form-control text-end" name="name_ur" dir="rtl"
                                 value="{{ old('name_ur', $transport->name_ur ?? '') }}">
                         </div>
@@ -28,14 +28,14 @@
                                 value="{{ old('company_name', $transport->company_name) }}">
                         </div>
                     </div>
-                    <div class="row mb-4">
-                        <div class="col-md-6 mb-3">
-                            <label>Address:</label>
-                            <textarea class="form-control" name="address"
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Address</label>
+                            <textarea name="address" class="form-control"
                                 rows="3">{{ old('address', $transport->address) }}</textarea>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">پتہ</label>
+                            <label class="form-label">Secondary Address</label>
                             <textarea rows="3" class="form-control text-end" name="address_ur"
                                 dir="rtl">{{ old('address_ur', $transport->address_ur ?? '') }}</textarea>
                         </div>

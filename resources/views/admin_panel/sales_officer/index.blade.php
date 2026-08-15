@@ -69,7 +69,7 @@
                             <input type="text" name="name" class="form-control" required />
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">نام</label>
+                            <label class="form-label">Secondary Name</label>
                             <input type="text" name="name_urdu" class="form-control text-end" dir="rtl" required />
                         </div>
                         <div class="mb-3">
@@ -102,7 +102,7 @@
                             <input type="text" name="name" id="edit_name" class="form-control" required />
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">نام</label>
+                            <label class="form-label">Secondary Name</label>
                             <input type="text" name="name_urdu" id="edit_name_urdu" class="form-control text-end" dir="rtl" required />
                         </div>
                         <div class="mb-3">

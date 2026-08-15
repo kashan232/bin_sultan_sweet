@@ -19,9 +19,9 @@
                             </div>
 
                             <div class="col-md-6">
-                                <label class="form-label">نام (اردو)</label>
+                                <label class="form-label">Secondary Name</label>
                                 <input type="text" class="form-control text-end" name="name_ur" dir="rtl"
-                                       value="{{ old('name_ur', $transport->name_ur ?? '') }}" placeholder="نام درج کریں">
+                                       value="{{ old('name_ur', $transport->name_ur ?? '') }}" placeholder="Enter name">
                             </div>
                         </div>
 
@@ -49,12 +49,12 @@
                         <div class="row mb-4">
                             <div class="col-md-6">
                                 <label class="form-label">Address</label>
-                                <textarea class="form-control" name="address" rows="3" placeholder="Enter address">{{ old('address') }}</textarea>
+                                <textarea class="form-control" name="address" rows="3">{{ old('address', $transport->address ?? '') }}</textarea>
                             </div>
 
                             <div class="col-md-6">
-                                <label class="form-label">پتہ (اردو)</label>
-                                <textarea class="form-control text-end" name="address_ur" rows="3" dir="rtl" placeholder="پتہ درج کریں">{{ old('address_ur', $transport->address_ur ?? '') }}</textarea>
+                                <label class="form-label">Secondary Address</label>
+                                <textarea class="form-control text-end" name="address_ur" rows="3" dir="rtl" placeholder="Enter address">{{ old('address_ur', $transport->address_ur ?? '') }}</textarea>
                             </div>
                         </div>
 

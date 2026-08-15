@@ -300,10 +300,10 @@ class SaleController extends Controller
 
         $items = $products->getCollection()->map(function ($product) {
             // ─── Price Resolution ───────────────────────────────────────────
-            // اگر product کی خود کی price 0 یا خالی ہو تو variants سے لیں
+            // If product price is 0 or empty, fetch from variants
             $rawPrice = (float) $product->price;
             if ($rawPrice <= 0 && $product->variants->count() > 0) {
-                // پہلے default variant تلاش کریں
+                // Find default variant first
                 $defaultVariant = $product->variants->firstWhere('is_default', true)
                     ?? $product->variants->first();
                 $rawPrice = (float) ($defaultVariant->price ?? 0);

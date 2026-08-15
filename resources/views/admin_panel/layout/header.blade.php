@@ -12,7 +12,7 @@
                         <li class="nav-item nav-profile dropdown">
                             <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown"
                                 id="profileDropdown">
-                                <span class="profile_name">{{ Auth::user()->name }} <i
+                                <span class="profile_name">{{ Auth::user()?->name ?? 'User' }} <i
                                         class="feather ft-chevron-down"></i></span>
                             </a>
                             <div class="dropdown-menu dropdown-menu-right navbar-dropdown pt-2"
@@ -88,6 +88,7 @@
                                     <ul class="submenu-item">
                                         @can('Purchase')
                                         <li><a href="{{ route('Purchase.home') }}"><i class="fas fa-shopping-cart"></i> Purchase</a></li>
+                                        <li><a href="{{ route('raw_materials.index') }}"><i class="fa fa-cubes"></i> Raw Materials</a></li>
                                         <li><a href="{{ route('production.index') }}"><i class="fas fa-industry"></i> Own Production</a></li>
                                         <li><a href="{{ route('stock-adjustment.index') }}"><i class="fas fa-sliders-h"></i> Stock Adjustment</a></li>
                                         @endcan
@@ -290,7 +291,7 @@
                                     </a>
                                 </li>
 
-                                @if (auth()->user()->email === 'admin@admin.com')
+                                @if (auth()->user()?->email === 'admin@admin.com')
                                 <li>
                                     <a href="{{ route('expense.vocher') }}">
                                         <i class="fa-solid fa-users"></i> Expense Report
@@ -304,7 +305,7 @@
                     @endcanany
 
                     <!-- User Management Menu -->
-                    @if (auth()->user()->email === 'admin@admin.com')
+                    @if (auth()->user()?->email === 'admin@admin.com')
                     <li class="nav-item">
                         <a href="#" class="nav-link">
                             <i class="menu_icon fas fa-users-cog"></i>
@@ -327,7 +328,7 @@
                     </li>
                     @endif
 
-                    @if (auth()->user()->email === 'admin@admin.com')
+                    @if (auth()->user()?->email === 'admin@admin.com')
                     <li class="nav-item">
                         <a href="{{ route('cashbook') }}" class="nav-link">
                             <i class="menu_icon fas fa-users-cog"></i>
