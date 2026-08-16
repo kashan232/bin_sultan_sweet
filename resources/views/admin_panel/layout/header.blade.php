@@ -51,7 +51,7 @@
                     </li>
                     @endcanany
 
-                    @canany(['Products','Category','Sub Category','Brands','Purchase','Purchase Return','Vendor','List Warehouse','Warehouse Stock','Stock Transfer','Sales','Sale Return','Bookings','Customer'])
+                    @canany(['Products','Category','Sub Category','Brands','Purchase','Purchase Return','Vendor','Raw Materials','List Warehouse','Warehouse Stock','Stock Transfer','Sales','Sale Return','Bookings','Customer'])
                     <li class="nav-item mega-menu">
                         <a href="#" class="nav-link">
                             <i class="menu_icon fas fa-user-shield"></i>
