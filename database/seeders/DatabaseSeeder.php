@@ -31,16 +31,21 @@ class DatabaseSeeder extends Seeder
         ]);
 
         
-        $branchUser = User::create([
-                    'name' => 'soban',
-                    'email' => 'soban@soban.com',
-                    'password' => Hash::make('soban')
-                ]);
-        $adminUser = User::create([
-                    'name' => 'admin',
-                    'email' => 'admin@admin.com',
-                    'password' => Hash::make('admin')
-                ]);
+        $branchUser = User::firstOrCreate(
+            ['email' => 'soban@soban.com'],
+            [
+                'name' => 'soban',
+                'password' => Hash::make('soban')
+            ]
+        );
+
+        $adminUser = User::firstOrCreate(
+            ['email' => 'admin@admin.com'],
+            [
+                'name' => 'admin',
+                'password' => Hash::make('admin')
+            ]
+        );
 
          $permissions = [
             'Create Product',

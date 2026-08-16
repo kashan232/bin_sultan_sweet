@@ -23,10 +23,10 @@ class CategorySeeder extends Seeder
         ];
 
         foreach ($data as $categoryName => $subcategories) {
-            $category = Category::create(['name' => $categoryName]);
+            $category = Category::firstOrCreate(['name' => $categoryName]);
 
             foreach ($subcategories as $sub) {
-                Subcategory::create([
+                Subcategory::firstOrCreate([
                     'category_id' => $category->id,
                     'name' => $sub,
                 ]);
